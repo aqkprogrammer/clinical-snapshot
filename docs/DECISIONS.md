@@ -278,12 +278,35 @@ Carried deliberately, with reasons, rather than fixed silently:
   `assembler` / `result`. Mechanical; deferred under the time cap.
 - `/excluded` and `/data-quality` re-run the pipeline via `build()` rather than
   `normalize()`, so they do not populate `unresolved_references`.
-- A malformed bundle returns a plain-text 500 rather than problem+json,
-  including from `/health`.
-- `CrossRecordResource` is dead code that reaches the API contract as an
-  always-empty array.
-- No focus styles; no `loading.tsx` / `error.tsx`.
 - Observation routing uses a `len(blockers) >= 2` threshold that treats date
-  precision as a renderability blocker, which is not coherent.
+  precision as a renderability blocker. It happens to give the right answer for
+  this bundle, and is incoherent in general.
+- Accessibility beyond focus styles and the loading/error boundaries: sections
+  are not exposed as landmarks, clinical rows are `<div>`s rather than lists,
+  `--muted` on the page background is 4.22:1 against a 4.5 target, and some
+  code-mismatch reasons live only in `title` attributes.
 
 These are recorded in full in the review sections of the project history.
+
+## 9. Robustness
+
+A bad bundle and a bad path parameter are the two remaining sources of input the
+application does not control.
+
+**Bad bundle.** `load_bundle` failures are typed — `BundleNotFoundError` for a
+missing path, `BundleUnreadableError` for unparseable JSON, a wrong-shaped
+document, or an unreadable file. Both surface as 503 `problem+json` with a
+generic message; the specifics are logged rather than returned, because a 503
+body should not disclose a filesystem path to an unauthenticated caller.
+`/api/v1/health` degrades instead of failing.
+
+**Bad path parameter.** `patient_id` is constrained to the FHIR `id` charset,
+`[A-Za-z0-9\-.]{1,64}`, so anything else is a 422 raised by the framework before
+a handler runs. That closes two things at once: an over-long or injection-shaped
+id can no longer reach a structured log line, and the 404 body can safely name
+the id it did not find because only safe characters can get that far. The 422
+reports the field that failed, never the value.
+
+A catch-all handler backstops both, returning `problem+json` and logging only
+the exception type. Nothing should reach it; it exists so that if something
+does, a client gets a well-formed document rather than a stack trace.

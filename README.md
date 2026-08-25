@@ -23,7 +23,7 @@ make web      # http://localhost:3000
 ```
 
 ```bash
-make check    # 306 backend + 65 frontend tests, ruff, mypy --strict, tsc --noEmit
+make check    # 344 backend + 69 frontend tests, ruff, mypy --strict, tsc --noEmit
 make test     # backend only        make test-web  # frontend only
 make lint     # ruff                make typecheck # mypy + tsc
 ```
@@ -202,6 +202,14 @@ things.
 | `GET /api/v1/patients/{id}/excluded` | retracted resources, separately |
 | `GET /api/v1/patients/{id}/data-quality` | the full typed issue log |
 
+Every error is `application/problem+json` — including 422s from path validation
+and anything unhandled. A corrupt or missing bundle is a 503 whose body says the
+bundle could not be parsed but does not disclose the path; the specifics go to
+the log. `/api/v1/health` stays 200 and reports `degraded`, because a liveness
+probe that fails on a bad bundle stops the stack coming up at all instead of
+letting it come up and say what is wrong — readiness should key on
+`bundleLoaded`.
+
 Retracted resources are on their own endpoint so they cannot be rendered beside
 clinical sections by accident. Errors are RFC 7807 `application/problem+json`.
 OpenAPI at `/docs`.
@@ -272,15 +280,19 @@ The data is synthetic; the handling is what's being assessed.
 - **CORS** is an explicit two-origin localhost allowlist with `GET` only and no
   credentials — never a wildcard.
 
+- **Path parameters are validated against the FHIR `id` charset**
+  (`[A-Za-z0-9\-.]{1,64}`), so anything else is rejected as 422 before a handler
+  runs — keeping unvalidated input out of both the log line and the 404 body.
+  The 422 names the field that failed, never the value.
+
 **Known gaps, deliberately out of scope:** no authentication, authorization or
 rate limiting — any caller can read any patient. No security headers
-(`X-Content-Type-Options`, CSP). Containers run as root. Path parameters are
-unvalidated, so an over-long patient id reaches the log line. These are the
-first things to fix before this went anywhere real.
+(`X-Content-Type-Options`, CSP). Containers run as root. These are the first
+things to fix before this went anywhere real.
 
 ## Testing
 
-306 backend and 65 frontend tests. The ones that matter are in `apps/api/tests/safety/`, which
+344 backend and 69 frontend tests. The ones that matter are in `apps/api/tests/safety/`, which
 asserts properties that must hold for **any** bundle, against the serialized
 HTTP payload rather than domain objects:
 
@@ -320,10 +332,12 @@ build — see `AI_USAGE.md`.
   `assembler` / `result`. Mechanical, and deferred under the time cap.
 - **`/excluded` and `/data-quality` re-run the pipeline** rather than deriving
   from one `NormalizationResult`, and use `build()` rather than `normalize()`.
-- **A malformed bundle returns a plain-text 500**, including from `/health`,
-  instead of problem+json.
-- **No focus styles, and no `loading.tsx` / `error.tsx`.** The accessibility
-  review in the project history lists these and six more.
+- **Observation routing uses a `len(blockers) >= 2` threshold** that counts date
+  precision as a renderability blocker. It gives the right answer for this
+  bundle and is not coherent in general.
+- **Accessibility beyond focus and boundaries.** Sections are not exposed as
+  landmarks, clinical rows are `<div>`s rather than lists, and some mismatch
+  reasons live only in `title` attributes. Listed in full in the project history.
 - **Single bundle, configured by path.** Multi-scenario support is a config
   change, not an abstraction.
 - **`_shorten` for unknown identifier systems** turns
@@ -337,8 +351,8 @@ build — see `AI_USAGE.md`.
 
 ## With more time
 
-1. Fix the items above: split `snapshot.py`, single-pass the endpoints, wrap the
-   loader in problem+json, add focus styles and the loading/error boundaries.
+1. Fix the items above: split `snapshot.py`, single-pass the endpoints, and work
+   through the remaining accessibility findings.
 2. A real terminology service behind `TerminologyService`, with the curated map
    as an offline fallback.
 3. Let a reviewer *act* on the duplicate candidate — record a steward decision

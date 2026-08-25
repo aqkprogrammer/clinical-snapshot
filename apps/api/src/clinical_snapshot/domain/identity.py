@@ -129,21 +129,6 @@ class Evidence:
 
 
 @dataclass(frozen=True, slots=True)
-class CrossRecordResource:
-    """A clinical resource attached to a non-primary candidate record.
-
-    Surfaced explicitly rather than merged in or dropped. Hiding an active
-    medication is as much a safety failure as misattributing one.
-    """
-
-    resource_id: str
-    resource_type: str
-    status: str | None
-    patient_id: str
-    note: str
-
-
-@dataclass(frozen=True, slots=True)
 class DuplicateCandidate:
     candidate_id: str
     member_ids: tuple[str, ...]
@@ -161,7 +146,6 @@ class DuplicateCandidate:
     """Clinical resource ids owned by each member. Nothing is reassigned
     between members; this records what would be at stake in a merge."""
 
-    cross_record_resources: tuple[CrossRecordResource, ...] = field(default_factory=tuple)
     recommended_action: str = "human-steward-review"
 
 

@@ -214,14 +214,6 @@ class Evidence(Schema):
     direction: str
 
 
-class CrossRecordResource(Schema):
-    resource_id: str
-    resource_type: str
-    status: str | None = None
-    patient_id: str
-    note: str
-
-
 class DuplicateCandidate(Schema):
     candidate_id: str
     member_ids: list[str]
@@ -233,7 +225,6 @@ class DuplicateCandidate(Schema):
     source_asserted_link: str | None = None
     evidence_for: list[Evidence] = []
     evidence_against: list[Evidence] = []
-    cross_record_resources: list[CrossRecordResource] = []
     recommended_action: str
 
 

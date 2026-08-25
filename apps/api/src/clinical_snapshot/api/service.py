@@ -8,12 +8,15 @@ for.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from pydantic import ValidationError
 
 from ..domain.issues import DataQualityIssue, IssueLog
 from ..domain.snapshot import NormalizationResult, Snapshot, SnapshotAssembler
@@ -24,11 +27,20 @@ from ..schemas import responses as api
 
 
 class BundleNotFoundError(FileNotFoundError):
-    pass
+    """The configured bundle path does not exist."""
+
+
+class BundleUnreadableError(ValueError):
+    """The bundle exists but is not usable FHIR JSON.
+
+    Distinct from BundleNotFoundError because the operator response differs:
+    one is a misconfigured path, the other is a corrupt or wrong-shaped file.
+    Both are the service's problem, not the caller's, so both surface as 503.
+    """
 
 
 class PatientNotFoundError(LookupError):
-    pass
+    """No Patient resource with the requested id exists in the bundle."""
 
 
 class SnapshotService:
@@ -39,17 +51,47 @@ class SnapshotService:
     # -- loading -----------------------------------------------------------
 
     def _assembler(self) -> SnapshotAssembler:
+        """Load and index the bundle, or fail with a typed error.
+
+        A corrupt bundle must not reach the caller as an unhandled exception:
+        the API's own health endpoint is the thing most likely to be asked
+        about it, and it cannot answer if parsing takes the process down.
+        """
         if not self._path.exists():
             raise BundleNotFoundError(f"Bundle not found at {self._path}")
-        loaded = load_bundle(self._path)
+        try:
+            loaded = load_bundle(self._path)
+        except json.JSONDecodeError as exc:
+            raise BundleUnreadableError(
+                f"Bundle at {self._path} is not valid JSON (line {exc.lineno}, "
+                f"column {exc.colno})."
+            ) from exc
+        except ValidationError as exc:
+            raise BundleUnreadableError(
+                f"Bundle at {self._path} is not a usable FHIR Bundle: "
+                f"{exc.error_count()} validation error(s)."
+            ) from exc
+        except (OSError, UnicodeDecodeError) as exc:
+            raise BundleUnreadableError(f"Bundle at {self._path} could not be read.") from exc
         return SnapshotAssembler(loaded, withhold_excluded_values=self._withhold)
 
     # -- endpoints ---------------------------------------------------------
 
     def health(self, version: str) -> api.HealthResponse:
+        """Report liveness, and degrade rather than fail when the bundle is bad.
+
+        The failure detail is logged, not returned -- a health endpoint should
+        not disclose filesystem paths to an unauthenticated caller.
+        """
         try:
             assembler = self._assembler()
-        except BundleNotFoundError:
+        except (BundleNotFoundError, BundleUnreadableError) as exc:
+            log_event(
+                logging.ERROR,
+                "bundle unavailable",
+                reason=type(exc).__name__,
+                detail=str(exc),
+            )
             return api.HealthResponse(
                 status="degraded", version=version, bundle_loaded=False, patient_count=0
             )

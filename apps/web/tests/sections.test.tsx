@@ -492,3 +492,47 @@ describe("cross-section separation", () => {
     expect(within(attributed as HTMLElement).getByText(/MRN-48213-A/)).toBeInTheDocument();
   });
 });
+
+describe("loading and error boundaries", () => {
+  it("loading announces itself to assistive technology", async () => {
+    const { default: Loading } = await import("@/app/loading");
+    render(<Loading />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText(/Loading clinical snapshot/)).toBeInTheDocument();
+  });
+
+  it("loading mirrors the real layout so content does not reflow", async () => {
+    const { default: Loading } = await import("@/app/loading");
+    const { container } = render(<Loading />);
+    expect(container.querySelector(".patient-header")).not.toBeNull();
+    expect(container.querySelector(".grid")).not.toBeNull();
+    expect(container.querySelectorAll(".card").length).toBe(6);
+  });
+
+  it("the error boundary shows no clinical data and no raw message", async () => {
+    const { default: ErrorBoundary } = await import("@/app/error");
+    const error = Object.assign(new Error("Patient Dorothy Whitfield leaked here"), {
+      digest: "abc123",
+    });
+    const { container } = render(<ErrorBoundary error={error} reset={() => {}} />);
+    expect(container.textContent).not.toContain("Dorothy");
+    expect(container.textContent).toContain("abc123");
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("the error boundary offers a retry", async () => {
+    const { default: ErrorBoundary } = await import("@/app/error");
+    let retried = false;
+    render(
+      <ErrorBoundary
+        error={new Error("boom")}
+        reset={() => {
+          retried = true;
+        }}
+      />,
+    );
+    screen.getByRole("button", { name: /try again/i }).click();
+    expect(retried).toBe(true);
+  });
+});
