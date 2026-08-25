@@ -23,7 +23,9 @@ make web      # http://localhost:3000
 ```
 
 ```bash
-make check    # 153 backend tests + ruff + mypy --strict + tsc --noEmit
+make check    # 306 backend + 65 frontend tests, ruff, mypy --strict, tsc --noEmit
+make test     # backend only        make test-web  # frontend only
+make lint     # ruff                make typecheck # mypy + tsc
 ```
 
 Requires Docker, or Python 3.11+ and Node 20+. The application makes no
@@ -194,7 +196,7 @@ things.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /health` | liveness + bundle status |
+| `GET /api/v1/health` | liveness + bundle status (`/health` is an unversioned alias for the container health check) |
 | `GET /api/v1/patients` | every Patient record + duplicate candidates with evidence |
 | `GET /api/v1/patients/{id}/snapshot` | the clinical snapshot, scoped to one record |
 | `GET /api/v1/patients/{id}/excluded` | retracted resources, separately |
@@ -204,11 +206,81 @@ Retracted resources are on their own endpoint so they cannot be rendered beside
 clinical sections by accident. Errors are RFC 7807 `application/problem+json`.
 OpenAPI at `/docs`.
 
+Every response is an envelope of `meta` (provenance and staleness), `data`, and
+`issues`. A representative fragment:
+
+```json
+{
+  "meta": {
+    "patientId": "patient-001",
+    "bundleTimestamp": "2026-06-01T09:00:00Z",
+    "latestClinicalActivity": "2025-11-04T15:00:00Z",
+    "daysSinceLatestActivity": 293,
+    "scopeNote": "Scoped to Patient/patient-001. No Patient records were merged."
+  },
+  "data": {
+    "conditionsCurrent": [{
+      "id": "condition-003",
+      "code": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "E11.9",
+        "display": null, "displayStatus": "unresolved",
+        "systemName": "ICD-10-CM", "displaySource": "unavailable",
+        "usableForCodedLogic": true
+      },
+      "onset": { "value": "2019", "precision": "year" },
+      "encounter": {
+        "reference": "Encounter/encounter-099", "resolved": false,
+        "reason": "REFERENCE_TARGET_NOT_IN_BUNDLE"
+      },
+      "categoryDeclared": false,
+      "provenance": { "resourceId": "condition-003", "admittedBy": "RULE_CONDITION_CURRENT" }
+    }]
+  },
+  "issues": [
+    { "code": "TERMINOLOGY_DISPLAY_MISSING", "severity": "medium",
+      "message": "No display available for ICD-10-CM code 'E11.9'. Rendered without a human-readable label rather than guessing one." }
+  ]
+}
+```
+
+Note what the shape forces: `display: null` beside `displayStatus: "unresolved"`
+means a consumer cannot render a name without deciding what to do about its
+absence, and `onset` cannot be formatted without acknowledging its precision.
+
 ---
+
+## Security and privacy
+
+The data is synthetic; the handling is what's being assessed.
+
+- **The SSN is withheld entirely, not masked.** A clinical snapshot has no use
+  for a national identifier. The MRN is retained because the duplicate-record
+  warning has to name the other record, and `withheldIdentifierCount` keeps the
+  omission visible rather than making it look like absent data.
+- **Identity evidence never quotes a strong identifier's value** — the evidence
+  is that two records matched, not what the identifier was.
+- **No PHI in logs.** Structured JSON logging records counts and the requested
+  patient id only, with a forbidden-key filter as a backstop. Resource bodies
+  are never logged at any level.
+- **No raw FHIR leaves the backend.** `fhir/models.py` models what the source
+  sent; `schemas/responses.py` models what we are willing to say. Nothing
+  crosses without passing through classification.
+- **Secrets.** `.gitignore` was written before `git init`, so `.env` has never
+  existed in history — verified with `git log --all --diff-filter=A`. The key it
+  holds funds the coding assistant, not the application: **the app makes no
+  outbound network calls and needs no API key to run.**
+- **CORS** is an explicit two-origin localhost allowlist with `GET` only and no
+  credentials — never a wildcard.
+
+**Known gaps, deliberately out of scope:** no authentication, authorization or
+rate limiting — any caller can read any patient. No security headers
+(`X-Content-Type-Options`, CSP). Containers run as root. Path parameters are
+unvalidated, so an over-long patient id reaches the log line. These are the
+first things to fix before this went anywhere real.
 
 ## Testing
 
-153 backend tests. The ones that matter are in `apps/api/tests/safety/`, which
+306 backend and 65 frontend tests. The ones that matter are in `apps/api/tests/safety/`, which
 asserts properties that must hold for **any** bundle, against the serialized
 HTTP payload rather than domain objects:
 
@@ -224,6 +296,19 @@ HTTP payload rather than domain objects:
 Four adversarial fixtures: source-asserted link, fully-retracted bundle,
 month-precision dates, empty bundle.
 
+The frontend suite concentrates on `components/primitives/` — every place the UI
+could imply more confidence than the data supports goes through one of four
+components, so those are asserted directly: a year-only date never widens, an
+unresolved code never acquires a name *and* never falls back to the bare code
+styled as one, a mismatched code keeps its label but carries the warning, and an
+unresolved reference reads differently from an absent one. Section tests assert
+*separation*: stopped medications never share a list with active ones, a
+duplicate record's medication only ever appears inside an attributed block, and
+no observation row renders an abnormal indicator.
+
+Two of these tests earned their place by catching real regressions during the
+build — see `AI_USAGE.md`.
+
 ---
 
 ## Tradeoffs accepted under the time cap
@@ -231,10 +316,14 @@ month-precision dates, empty bundle.
 - **The curated terminology map is small.** Correctness and auditability over
   coverage. A real ValueSet/`$lookup` integration slots in behind
   `TerminologyService` without touching callers.
-- **No frontend test suite.** The uncertainty logic lives in
-  `components/primitives/`, and the backend contract is covered by the safety
-  suite. Component tests for those four primitives are the first thing I would
-  add.
+- **`domain/snapshot.py` is 1,270 lines** and should be split into `views` /
+  `assembler` / `result`. Mechanical, and deferred under the time cap.
+- **`/excluded` and `/data-quality` re-run the pipeline** rather than deriving
+  from one `NormalizationResult`, and use `build()` rather than `normalize()`.
+- **A malformed bundle returns a plain-text 500**, including from `/health`,
+  instead of problem+json.
+- **No focus styles, and no `loading.tsx` / `error.tsx`.** The accessibility
+  review in the project history lists these and six more.
 - **Single bundle, configured by path.** Multi-scenario support is a config
   change, not an abstraction.
 - **`_shorten` for unknown identifier systems** turns
@@ -248,8 +337,8 @@ month-precision dates, empty bundle.
 
 ## With more time
 
-1. Component tests for the four uncertainty primitives, plus a visual
-   regression test on the snapshot page.
+1. Fix the items above: split `snapshot.py`, single-pass the endpoints, wrap the
+   loader in problem+json, add focus styles and the loading/error boundaries.
 2. A real terminology service behind `TerminologyService`, with the curated map
    as an offline fallback.
 3. Let a reviewer *act* on the duplicate candidate — record a steward decision
@@ -259,5 +348,7 @@ month-precision dates, empty bundle.
 5. Widen the safety suite into property-based tests over generated bundles
    (Hypothesis) rather than four hand-built fixtures.
 
-See `docs/DECISIONS.md` for the full rule tables and the complete identity
-evidence analysis, and `AI_USAGE.md` for how the AI assistant was used.
+See `docs/DECISIONS.md` for the full rule tables, the complete identity evidence
+analysis, and a list of known open items carried deliberately. `AI_USAGE.md`
+covers how the AI assistant was directed and, more usefully, the ten places its
+output was corrected or rejected.
