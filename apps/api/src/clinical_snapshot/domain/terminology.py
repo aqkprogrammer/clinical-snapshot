@@ -102,7 +102,19 @@ class TerminologyService:
         if entry:
             name: str = entry.get("name", system)
             return name
-        return self._external.get(system, system)
+        return self._external.get(system) or self._shorten(system)
+
+    @staticmethod
+    def _shorten(system: str) -> str:
+        """Display label for a system URI we have no name for.
+
+        Returns the final path segment of the URI. This is a shortening of what
+        the source literally said, not an interpretation of it -- an unknown
+        system stays unknown, it just stops rendering as a full URL in a
+        clinician-facing header. The complete URI remains in the payload.
+        """
+        tail = system.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+        return tail.upper() if len(tail) <= 5 else tail
 
     def resolve(
         self,

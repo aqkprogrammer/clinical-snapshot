@@ -44,6 +44,6 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
 python_version = "3.11"
-files = ["src/clinical_snapshot/domain"]
+files = ["src/clinical_snapshot/domain", "src/clinical_snapshot/fhir"]
 mypy_path = "src"
 strict = true

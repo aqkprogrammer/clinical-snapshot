@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import ValidationError
 
 from ..domain.issues import IssueCode, IssueLog, Severity
-from .index import ResourceIndex
+from .index import BundleIndex, IndexConflictKind
 from .models import RESOURCE_MODELS, Bundle, DomainResource, UnknownResource
 
 _URN_UUID_PREFIX = "urn:uuid:"
@@ -27,7 +26,7 @@ class LoadedBundle:
     """A parsed bundle plus everything we learned while parsing it."""
 
     bundle: Bundle
-    index: ResourceIndex
+    index: BundleIndex
     issues: IssueLog
     unparsed_entry_count: int = 0
     full_urls: list[str] = field(default_factory=list)
@@ -45,7 +44,7 @@ def load_bundle(path: Path, issues: IssueLog | None = None) -> LoadedBundle:
 
     _check_bundle_structure(bundle, issues)
 
-    index = ResourceIndex()
+    index = BundleIndex()
     unparsed = 0
     full_urls: list[str] = []
 
@@ -103,6 +102,7 @@ def load_bundle(path: Path, issues: IssueLog | None = None) -> LoadedBundle:
         index.add(resource, entry.fullUrl)
 
     _check_full_urls(full_urls, issues)
+    _report_index_conflicts(index, issues)
     _check_provenance(index, issues)
 
     return LoadedBundle(
@@ -148,19 +148,41 @@ def _check_full_urls(full_urls: list[str], issues: IssueLog) -> None:
             detail={"count": str(len(invalid_urns))},
         )
 
-    counts = Counter(full_urls)
-    duplicates = sorted(url for url, n in counts.items() if n > 1)
-    if duplicates:
+
+
+def _report_index_conflicts(index: BundleIndex, issues: IssueLog) -> None:
+    """Translate structural indexing conflicts into data-quality issues.
+
+    The index never discards a duplicate, so these say "one of these is not
+    reachable by address", not "one of these was dropped".
+    """
+    severities = {
+        IndexConflictKind.DUPLICATE_KEY: Severity.HIGH,
+        IndexConflictKind.DUPLICATE_FULL_URL: Severity.HIGH,
+        IndexConflictKind.MISSING_ID: Severity.MEDIUM,
+    }
+    codes = {
+        IndexConflictKind.DUPLICATE_KEY: IssueCode.BDL_DUPLICATE_RESOURCE_ID,
+        IndexConflictKind.DUPLICATE_FULL_URL: IssueCode.BDL_DUPLICATE_FULLURL,
+        IndexConflictKind.MISSING_ID: IssueCode.RESOURCE_ID_MISSING,
+    }
+    for conflict in index.report().conflicts:
         issues.add(
-            IssueCode.BDL_DUPLICATE_FULLURL,
-            Severity.HIGH,
-            f"Duplicate fullUrl value(s) in bundle: {', '.join(duplicates)}. "
-            f"FHIR requires entry.fullUrl to be unique.",
-            path="Bundle.entry.fullUrl",
+            codes[conflict.kind],
+            severities[conflict.kind],
+            conflict.message,
+            resource_type=conflict.resource_type,
+            path="Bundle.entry",
+            detail={
+                "key": conflict.key or "",
+                "fullUrl": conflict.full_url or "",
+                "positions": ",".join(map(str, conflict.positions)),
+                "shadowedPositions": ",".join(map(str, conflict.shadowed_positions)),
+            },
         )
 
 
-def _check_provenance(index: ResourceIndex, issues: IssueLog) -> None:
+def _check_provenance(index: BundleIndex, issues: IssueLog) -> None:
     has_provenance = bool(index.of_type("Provenance"))
     has_versioning = any(r.meta and (r.meta.versionId or r.meta.lastUpdated) for r in index.all())
     if not has_provenance and not has_versioning:

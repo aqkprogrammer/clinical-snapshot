@@ -1,0 +1,237 @@
+/*
+ * A clinical snapshot is read under time pressure, so the visual system encodes
+ * one thing above all: how much you can trust what you are looking at.
+ *
+ *   solid text            a fact the source stated plainly
+ *   dashed / italic grey  something the source did not tell us
+ *   amber                 present, but caveated
+ *   red                   act on this before reading anything else
+ *
+ * Uncertainty is never rendered as absence.
+ */
+
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #10151c;
+  --ink-soft: #3d4956;
+  --muted: #6b7784;
+  --line: #dde3e9;
+  --line-strong: #c3ccd6;
+
+  --accent: #0f5d7c;
+  --accent-soft: #e8f2f6;
+
+  --danger: #a8161f;
+  --danger-bg: #fdf1f1;
+  --danger-line: #f0c4c4;
+
+  --warn: #8a5300;
+  --warn-bg: #fff7e8;
+  --warn-line: #f0dcb4;
+
+  --unknown: #6f6a7d;
+  --unknown-bg: #f6f4f8;
+
+  --ok: #1d6b45;
+  --ok-bg: #ecf6f0;
+
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(16, 21, 28, 0.06), 0 1px 8px rgba(16, 21, 28, 0.04);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 1180px; margin: 0 auto; padding: 24px 20px 72px; }
+
+/* -- typography ---------------------------------------------------------- */
+
+h1 { font-size: 25px; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
+     color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
+
+.mono { font-family: var(--mono); font-size: 12px; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+
+/* -- layout -------------------------------------------------------------- */
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.section-note {
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--unknown-bg);
+  border-left: 2px solid var(--line-strong);
+  padding: 6px 10px;
+  border-radius: 0 4px 4px 0;
+  margin: 0 0 12px;
+}
+
+/* -- rows ---------------------------------------------------------------- */
+
+.row { padding: 11px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: none; padding-top: 2px; }
+.row-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.row-title { font-weight: 600; font-size: 15px; }
+.row-meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 3px;
+            font-size: 12.5px; color: var(--muted); }
+
+.empty { color: var(--muted); font-style: italic; font-size: 13.5px; padding: 4px 0; }
+
+/* -- patient header ------------------------------------------------------ */
+
+.patient-header {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.patient-facts { display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 12px; }
+.fact-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+              color: var(--muted); display: block; }
+.fact-value { font-size: 14px; }
+
+/* -- banners ------------------------------------------------------------- */
+
+.banner {
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  margin-bottom: 12px;
+  border: 1px solid;
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+.banner-high   { background: var(--danger-bg); border-color: var(--danger-line); color: var(--danger); }
+.banner-medium { background: var(--warn-bg);   border-color: var(--warn-line);   color: var(--warn); }
+.banner-icon { font-size: 16px; line-height: 1.3; }
+.banner-title { font-weight: 700; font-size: 13.5px; margin-bottom: 2px; }
+.banner-body { color: var(--ink-soft); font-size: 13.5px; }
+
+/* -- badges -------------------------------------------------------------- */
+
+.badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.badge-neutral { background: #eef1f4; border-color: #dde3e9; color: var(--ink-soft); }
+.badge-warn    { background: var(--warn-bg);   border-color: var(--warn-line);   color: var(--warn); }
+.badge-danger  { background: var(--danger-bg); border-color: var(--danger-line); color: var(--danger); }
+.badge-unknown { background: var(--unknown-bg); border-color: var(--line-strong);
+                 color: var(--unknown); border-style: dashed; }
+.badge-ok      { background: var(--ok-bg); border-color: #cfe6da; color: var(--ok); }
+
+/* -- uncertainty --------------------------------------------------------- */
+
+.unknown-value {
+  color: var(--unknown);
+  font-style: italic;
+  border-bottom: 1px dashed var(--line-strong);
+  padding-bottom: 1px;
+}
+.code-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: #f1f4f7;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.precision-hint { color: var(--unknown); font-style: italic; }
+
+/* -- attribution --------------------------------------------------------- */
+
+.attributed {
+  border-left: 3px solid var(--warn-line);
+  background: var(--warn-bg);
+  padding: 11px 13px;
+  border-radius: 0 4px 4px 0;
+  margin-top: 10px;
+}
+.attribution-note {
+  font-size: 12px; color: var(--warn); font-weight: 600;
+  display: block; margin-bottom: 7px;
+}
+
+/* -- disclosure ---------------------------------------------------------- */
+
+details.drawer { border: 1px solid var(--line); border-radius: var(--radius);
+                 background: var(--surface); margin-bottom: 16px; }
+details.drawer > summary {
+  cursor: pointer; padding: 13px 16px; font-weight: 600; font-size: 14px;
+  list-style: none; display: flex; align-items: center; gap: 9px;
+}
+details.drawer > summary::-webkit-details-marker { display: none; }
+details.drawer > summary::before { content: "▸"; color: var(--muted); font-size: 12px; }
+details.drawer[open] > summary::before { content: "▾"; }
+details.drawer > summary:hover { background: #fafbfc; }
+.drawer-body { padding: 0 16px 14px; border-top: 1px solid var(--line); }
+
+/* -- excluded ------------------------------------------------------------ */
+
+.excluded-row { padding: 11px 0; border-top: 1px solid var(--line); }
+.excluded-row:first-child { border-top: none; }
+.withheld {
+  font-size: 12.5px; color: var(--danger); background: var(--danger-bg);
+  border: 1px dashed var(--danger-line); border-radius: 4px;
+  padding: 5px 9px; margin-top: 6px; display: inline-block;
+}
+
+/* -- evidence table ------------------------------------------------------ */
+
+.evidence-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 820px) { .evidence-cols { grid-template-columns: 1fr; } }
+.evidence-item { padding: 8px 0; border-top: 1px dotted var(--line); font-size: 13px; }
+.evidence-item:first-of-type { border-top: none; }
+.evidence-signal { font-family: var(--mono); font-size: 11.5px; color: var(--ink-soft); }
+
+/* -- issues -------------------------------------------------------------- */
+
+.issue-row { display: grid; grid-template-columns: 74px 1fr; gap: 11px;
+             padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.issue-row:first-of-type { border-top: none; }
+.issue-code { font-family: var(--mono); font-size: 11px; color: var(--muted);
+              word-break: break-all; margin-top: 3px; }
+
+/* -- error --------------------------------------------------------------- */
+
+.fatal { background: var(--danger-bg); border: 1px solid var(--danger-line);
+         border-radius: var(--radius); padding: 22px; }
+.fatal code { font-family: var(--mono); font-size: 12.5px; background: #fff;
+              padding: 2px 6px; border-radius: 4px; border: 1px solid var(--danger-line); }

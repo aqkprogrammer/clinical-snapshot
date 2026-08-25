@@ -36,12 +36,22 @@ from ..fhir.models import (
     Patient,
     Reference,
 )
-from ..fhir.resolver import ReferenceResolver, ResolvedReference
+from ..fhir.resolver import (
+    ReferenceResolver,
+    ResolutionResult,
+    ResolutionStatus,
+)
 from .identity import DuplicateCandidate, IdentityAnalysis, IdentityAnalyzer
 from .issues import IssueCode, IssueLog, Severity
 from .partial_date import PartialDate
 from .safety import Classification, Disposition, Flag, classify
 from .terminology import DisplayStatus, ResolvedCoding, TerminologyService
+
+_RESOLUTION_ISSUES: dict[ResolutionStatus, tuple[IssueCode, Severity]] = {
+    ResolutionStatus.UNRESOLVED: (IssueCode.REFERENCE_UNRESOLVED, Severity.MEDIUM),
+    ResolutionStatus.MALFORMED: (IssueCode.REFERENCE_MALFORMED, Severity.HIGH),
+    ResolutionStatus.TYPE_MISMATCH: (IssueCode.REFERENCE_TYPE_MISMATCH, Severity.HIGH),
+}
 
 US_CORE = "http://hl7.org/fhir/us/core/StructureDefinition"
 RACE_EXT = f"{US_CORE}/us-core-race"
@@ -270,7 +280,7 @@ class SnapshotAssembler:
         self._loaded = loaded
         self._issues: IssueLog = loaded.issues
         self._terminology = TerminologyService(self._issues)
-        self._resolver = ReferenceResolver(loaded.index, self._issues)
+        self._resolver = ReferenceResolver(loaded.index)
         self._withhold = withhold_excluded_values
 
     # -- public ------------------------------------------------------------
@@ -420,26 +430,20 @@ class SnapshotAssembler:
         return counts
 
     def resources_for(self, patient_id: str) -> list[DomainResource]:
-        """Resources whose subject resolves to this patient, and only this one.
+        """Resources whose subject is this patient, and only this one.
+
+        Delegated to the index because it is a purely structural question, and
+        because scoping is consulted repeatedly -- routing it through the
+        resolver would report the same reference many times over.
 
         The scope boundary is enforced here and asserted by the safety suite:
         no resource belonging to another Patient record enters a snapshot
         except through the explicit attribution path.
         """
-        owned: list[DomainResource] = []
-        for resource in self._loaded.index.all():
-            if isinstance(resource, Patient):
-                continue
-            ref = self._subject_ref(resource)
-            resolved = self._resolver.resolve(
-                ref,
-                source_id=resource.id,
-                source_type=resource.resourceType,
-                path=f"{resource.resourceType}.subject",
-            )
-            if resolved and resolved.target is not None and resolved.target.id == patient_id:
-                owned.append(resource)
-        return owned
+        patient = next((p for p in self.patients() if p.id == patient_id), None)
+        if patient is None:
+            return []
+        return [r for r in self._loaded.index.for_patient(patient) if not isinstance(r, Patient)]
 
     # -- builders ----------------------------------------------------------
 
@@ -473,17 +477,45 @@ class SnapshotAssembler:
             )
         return parsed
 
-    def _ref_view(self, resolved: ResolvedReference | None) -> ReferenceView | None:
+    def _resolve(
+        self,
+        reference: Reference | None,
+        *,
+        source: DomainResource,
+        path: str,
+        expected_type: str | None = None,
+    ) -> ResolutionResult | None:
+        """Resolve and report. The resolver itself stays free of reporting."""
+        result = self._resolver.resolve(reference, expected_type=expected_type)
+        if result is None or not result.is_problem:
+            return result
+
+        code, severity = _RESOLUTION_ISSUES[result.status]
+        self._issues.add(
+            code,
+            severity,
+            result.detail or f"Reference '{result.reference}' could not be used.",
+            resource_id=source.id,
+            resource_type=source.resourceType,
+            path=path,
+            detail={
+                "target": result.reference,
+                "reason": result.reason.value if result.reason else "",
+                "expectedType": result.expected_type or "",
+                "actualType": result.actual_type or "",
+            },
+        )
+        return result
+
+    def _ref_view(self, resolved: ResolutionResult | None) -> ReferenceView | None:
         if resolved is None:
             return None
-        display: str | None = None
-        if resolved.target is not None:
-            display = self._label_for(resolved.target)
+        display = self._label_for(resolved.target) if resolved.target is not None else None
         return ReferenceView(
             reference=resolved.reference,
             resolved=resolved.resolved,
             display=display,
-            reason=resolved.reason,
+            reason=resolved.reason.value if resolved.reason else None,
         )
 
     def _label_for(self, resource: DomainResource) -> str | None:
@@ -515,11 +547,11 @@ class SnapshotAssembler:
             ),
             onset=self._date(condition.onsetDateTime, condition, "Condition.onsetDateTime"),
             encounter=self._ref_view(
-                self._resolver.resolve(
+                self._resolve(
                     condition.encounter,
-                    source_id=condition.id,
-                    source_type="Condition",
+                    source=condition,
                     path="Condition.encounter",
+                    expected_type="Encounter",
                 )
             ),
             category_declared=bool(condition.category),
@@ -613,20 +645,22 @@ class SnapshotAssembler:
                 )
                 for component in observation.component
             ),
+            # Observation.performer legally targets Practitioner,
+            # PractitionerRole, Organization, CareTeam, Patient or RelatedPerson,
+            # so no expected type is asserted here.
             performer=self._ref_view(
-                self._resolver.resolve(
+                self._resolve(
                     observation.performer[0] if observation.performer else None,
-                    source_id=observation.id,
-                    source_type="Observation",
+                    source=observation,
                     path="Observation.performer[0]",
                 )
             ),
             encounter=self._ref_view(
-                self._resolver.resolve(
+                self._resolve(
                     observation.encounter,
-                    source_id=observation.id,
-                    source_type="Observation",
+                    source=observation,
                     path="Observation.encounter",
+                    expected_type="Encounter",
                 )
             ),
             reference_range_available=bool(observation.referenceRange),
