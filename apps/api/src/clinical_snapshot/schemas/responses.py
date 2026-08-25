@@ -35,7 +35,8 @@ class Coding(Schema):
     display: str | None = None
     display_status: str
     system_name: str | None = None
-    display_source: str | None = None
+    display_source: str
+    display_source_detail: str | None = None
     code_system_mismatch: bool = False
     mismatch_reason: str | None = None
     usable_for_coded_logic: bool = True
@@ -224,7 +225,10 @@ class DuplicateCandidate(Schema):
     candidate_id: str
     member_ids: list[str]
     determination: str
+    confidence: str
     merge_performed: bool
+    canonical_patient_id: str | None = None
+    member_resource_ids: dict[str, list[str]] = {}
     source_asserted_link: str | None = None
     evidence_for: list[Evidence] = []
     evidence_against: list[Evidence] = []

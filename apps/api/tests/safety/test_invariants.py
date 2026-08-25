@@ -148,13 +148,16 @@ class TestDisplaysAreNeverInvented:
             display, status = coding.get("display"), coding["displayStatus"]
             if status == "unresolved":
                 assert display is None, f"unresolved coding carries a display: {coding}"
+                assert coding["displaySource"] == "unavailable"
             elif status in ("from-source", "from-source-unvalidated"):
                 assert display is not None and display in raw_bundle_text, (
                     f"display '{display}' claims to come from the source but is not in it"
                 )
+                assert coding["displaySource"] == "fhir"
             elif status == "resolved-local":
                 assert display in curated_labels, f"'{display}' is not in the curated map"
-                assert coding["displaySource"], "a curated display must cite its source"
+                assert coding["displaySource"] == "verified-local-map"
+                assert coding["displaySourceDetail"], "a curated display must cite its source"
             else:
                 pytest.fail(f"unknown displayStatus '{status}'")
 

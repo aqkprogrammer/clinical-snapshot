@@ -134,3 +134,59 @@ class TestDescribe:
         day = PartialDate.parse("1958-03-12")
         assert day is not None
         assert day.describe() == "1958-03-12"
+
+
+class TestParsedValueWhereSafe:
+    """"Where safe" is the whole point: year and month precision yield no
+    calendar date at all, because every candidate would be invented."""
+
+    def test_year_precision_yields_no_parsed_date(self) -> None:
+        parsed = PartialDate.parse("2019")
+        assert parsed is not None
+        assert parsed.parsed_date is None
+        assert parsed.parsed_instant is None
+
+    def test_month_precision_yields_no_parsed_date(self) -> None:
+        parsed = PartialDate.parse("2019-07")
+        assert parsed is not None
+        assert parsed.parsed_date is None
+        assert parsed.parsed_instant is None
+
+    def test_day_precision_yields_a_date_but_no_instant(self) -> None:
+        from datetime import date
+
+        parsed = PartialDate.parse("1958-03-12")
+        assert parsed is not None
+        assert parsed.parsed_date == date(1958, 3, 12)
+        assert parsed.parsed_instant is None
+
+    def test_instant_yields_both(self) -> None:
+        from datetime import date
+
+        parsed = PartialDate.parse("2025-11-04T14:12:00Z")
+        assert parsed is not None
+        assert parsed.parsed_date == date(2025, 11, 4)
+        assert parsed.parsed_instant == datetime(2025, 11, 4, 14, 12, tzinfo=UTC)
+
+    def test_parsed_instant_is_always_timezone_aware(self) -> None:
+        for raw in ["2025-11-04T14:12:00Z", "2025-11-04T14:12:00+05:30"]:
+            parsed = PartialDate.parse(raw)
+            assert parsed is not None
+            assert parsed.parsed_instant is not None
+            assert parsed.parsed_instant.tzinfo is not None
+
+    def test_offset_is_respected_not_discarded(self) -> None:
+        aware = PartialDate.parse("2025-11-04T14:12:00+05:30")
+        utc = PartialDate.parse("2025-11-04T08:42:00Z")
+        assert aware is not None and utc is not None
+        assert aware.parsed_instant == utc.parsed_instant
+
+    def test_display_never_exceeds_source_precision(self) -> None:
+        for raw, expected in [
+            ("2019", "2019 (year only)"),
+            ("2019-07", "2019-07 (month only)"),
+            ("1958-03-12", "1958-03-12"),
+        ]:
+            parsed = PartialDate.parse(raw)
+            assert parsed is not None
+            assert parsed.display == expected

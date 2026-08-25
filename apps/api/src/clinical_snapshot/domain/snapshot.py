@@ -297,7 +297,22 @@ class SnapshotAssembler:
         return [p for p in self._loaded.index.of_type("Patient") if isinstance(p, Patient)]
 
     def analyse_identity(self) -> IdentityAnalysis:
-        return IdentityAnalyzer(self._issues).analyse(self.patients(), self._reference_counts())
+        # Retracted resources are excluded here as well as from the clinical
+        # sections. They are not "at stake in a merge" -- they are not clinical
+        # facts under either outcome -- and listing their ids inside the
+        # snapshot payload would leak them back into a clinician-facing view.
+        resource_ids = {
+            patient.id: tuple(
+                r.id or ""
+                for r in self.resources_for(patient.id)
+                if classify(r).disposition is not Disposition.EXCLUDED
+            )
+            for patient in self.patients()
+            if patient.id
+        }
+        return IdentityAnalyzer(self._issues).analyse(
+            self.patients(), self._reference_counts(), resource_ids
+        )
 
     def build(self, patient_id: str, *, as_of: datetime | None = None) -> Snapshot | None:
         patient = next((p for p in self.patients() if p.id == patient_id), None)
@@ -450,19 +465,47 @@ class SnapshotAssembler:
     def _coding(
         self, concept: CodeableConcept | None, resource: DomainResource, path: str
     ) -> ResolvedCoding:
-        primary = concept.primary if concept else None
-        return self._terminology.resolve(
-            primary.system if primary else None,
-            primary.code if primary else None,
-            primary.display if primary else (concept.text if concept else None),
-            source_id=resource.id,
-            source_type=resource.resourceType,
-            path=path,
+        """The coding a section renders.
+
+        Additional codings are translations of the same concept; they are
+        resolved and reported but not rendered, because choosing between two
+        code systems for one concept is a terminology decision we cannot make.
+        """
+        resolved = self._terminology.resolve_concept(
+            concept, source_id=resource.id, source_type=resource.resourceType, path=path
         )
+        if resolved.has_alternates:
+            self._issues.add(
+                IssueCode.TERMINOLOGY_MULTIPLE_CODINGS,
+                Severity.LOW,
+                f"{resource.key} {path} carries {len(resolved.alternates) + 1} codings. "
+                f"The first is rendered; the others are retained but not displayed.",
+                resource_id=resource.id,
+                resource_type=resource.resourceType,
+                path=path,
+            )
+        return resolved.primary
 
     def _date(self, raw: str | None, resource: DomainResource, path: str) -> PartialDate | None:
+        """Parse a source date, reporting reduced precision and invalid values.
+
+        Absent and malformed both yield None to the view layer -- there is no
+        date to show either way -- but only one of them is a data-quality
+        problem, so they are reported differently.
+        """
         parsed = PartialDate.parse(raw)
         if parsed is None:
+            if raw is not None and raw.strip():
+                self._issues.add(
+                    IssueCode.DATE_INVALID,
+                    Severity.MEDIUM,
+                    f"{path} is '{raw}', which is not a valid FHIR date or dateTime. "
+                    f"No date is shown for this record rather than a guessed one.",
+                    resource_id=resource.id,
+                    resource_type=resource.resourceType,
+                    path=path,
+                    detail={"value": raw},
+                )
             return None
         if parsed.is_reduced_precision:
             self._issues.add(

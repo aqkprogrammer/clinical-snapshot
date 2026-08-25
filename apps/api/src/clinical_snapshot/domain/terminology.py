@@ -25,6 +25,7 @@ from typing import Any
 
 import yaml
 
+from ..fhir.models import CodeableConcept
 from .issues import IssueCode, IssueLog, Severity
 
 SNOMED = "http://snomed.info/sct"
@@ -44,6 +45,24 @@ _CODE_SHAPES: dict[str, tuple[re.Pattern[str], str]] = {
         "a letter followed by 2-6 alphanumerics, optionally dotted",
     ),
 }
+
+
+class DisplaySource(StrEnum):
+    """Where a display came from. Never "the model knew it".
+
+    Deliberately coarse and auditable: a reader can answer "who said this
+    concept is called that?" from this field alone.
+    """
+
+    FHIR = "fhir"
+    """The bundle supplied the display. We pass it through unchanged."""
+
+    VERIFIED_LOCAL_MAP = "verified-local-map"
+    """Filled from the curated map of FHIR-specification CodeSystems. The
+    citation is in `display_source_detail`."""
+
+    UNAVAILABLE = "unavailable"
+    """No display, and none was inferred. Renders as "display unavailable"."""
 
 
 class DisplayStatus(StrEnum):
@@ -72,10 +91,31 @@ class ResolvedCoding:
     display: str | None
     display_status: DisplayStatus
     system_name: str | None = None
-    display_source: str | None = None
+    display_source: DisplaySource = DisplaySource.UNAVAILABLE
+    display_source_detail: str | None = None
+    """Citation for a curated display, e.g. the FHIR CodeSystem it came from."""
     code_system_mismatch: bool = False
     mismatch_reason: str | None = None
     usable_for_coded_logic: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedConcept:
+    """A CodeableConcept prepared for display.
+
+    FHIR permits several codings as translations of one concept. We render the
+    first and retain the rest rather than picking a "best" system -- choosing
+    between SNOMED CT and ICD-10 for the same concept is a terminology
+    decision we have no basis to make here.
+    """
+
+    primary: ResolvedCoding
+    alternates: tuple[ResolvedCoding, ...] = ()
+    text: str | None = None
+
+    @property
+    def has_alternates(self) -> bool:
+        return bool(self.alternates)
 
 
 @lru_cache(maxsize=1)
@@ -153,6 +193,7 @@ class TerminologyService:
                     DisplayStatus.FROM_SOURCE_UNVALIDATED if display else DisplayStatus.UNRESOLVED
                 ),
                 system_name=system_name,
+                display_source=DisplaySource.FHIR if display else DisplaySource.UNAVAILABLE,
                 code_system_mismatch=True,
                 mismatch_reason=(
                     f"Code '{code}' is not a well-formed identifier for {system_name} "
@@ -168,6 +209,7 @@ class TerminologyService:
                 display=display.strip(),
                 display_status=DisplayStatus.FROM_SOURCE,
                 system_name=system_name,
+                display_source=DisplaySource.FHIR,
             )
 
         local = self._lookup_local(system, code)
@@ -179,7 +221,18 @@ class TerminologyService:
                 display=label,
                 display_status=DisplayStatus.RESOLVED_LOCAL,
                 system_name=system_name,
-                display_source=source,
+                display_source=DisplaySource.VERIFIED_LOCAL_MAP,
+                display_source_detail=source,
+            )
+
+        if system is None and code is None:
+            return ResolvedCoding(
+                system=None,
+                code=None,
+                display=None,
+                display_status=DisplayStatus.UNRESOLVED,
+                system_name=None,
+                display_source=DisplaySource.UNAVAILABLE,
             )
 
         self._issues.add(
@@ -198,7 +251,45 @@ class TerminologyService:
             display=None,
             display_status=DisplayStatus.UNRESOLVED,
             system_name=system_name,
+            display_source=DisplaySource.UNAVAILABLE,
         )
+
+    def resolve_concept(
+        self,
+        concept: CodeableConcept | None,
+        *,
+        source_id: str | None = None,
+        source_type: str | None = None,
+        path: str | None = None,
+    ) -> ResolvedConcept:
+        """Resolve every coding in a CodeableConcept, preserving order.
+
+        With no codings at all, falls back to `CodeableConcept.text` -- which
+        is the source's own words, not an inference.
+        """
+        codings = list(concept.coding) if concept else []
+        text = concept.text if concept else None
+
+        if not codings:
+            return ResolvedConcept(
+                primary=self.resolve(
+                    None, None, text, source_id=source_id, source_type=source_type, path=path
+                ),
+                text=text,
+            )
+
+        resolved = [
+            self.resolve(
+                coding.system,
+                coding.code,
+                coding.display,
+                source_id=source_id,
+                source_type=source_type,
+                path=f"{path}.coding[{index}]" if path else None,
+            )
+            for index, coding in enumerate(codings)
+        ]
+        return ResolvedConcept(primary=resolved[0], alternates=tuple(resolved[1:]), text=text)
 
     # -- internals ---------------------------------------------------------
 

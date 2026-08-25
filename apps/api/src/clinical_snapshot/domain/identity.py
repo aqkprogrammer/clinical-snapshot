@@ -74,6 +74,33 @@ class EvidenceStrength(StrEnum):
     NEUTRAL = "neutral"
 
 
+class MatchConfidence(StrEnum):
+    """How much the evidence supports the two records being one person.
+
+    Computed deterministically from the evidence set -- see
+    `_confidence_from`. Confidence is reported, never acted on: even
+    `PROBABLE` does not authorise a merge, because only the source system may
+    assert identity.
+    """
+
+    CONFIRMED = "confirmed"
+    """The source declared a Patient.link. The only merge-authorising state."""
+
+    CONFLICTED = "conflicted"
+    """Strong identifiers actively disagree. Demographic similarity does not
+    override this -- it is the single most important rule in this module."""
+
+    PROBABLE = "probable"
+    """A high-entropy identifier matches and nothing strong contradicts it."""
+
+    POSSIBLE = "possible"
+    """Demographics overlap. Common, weak, and the usual source of false
+    positives in master patient index work."""
+
+    INSUFFICIENT = "insufficient"
+    """Too little to say anything."""
+
+
 class Determination(StrEnum):
     SOURCE_ASSERTED_LINK = "source-asserted-link"
     """The source used Patient.link. We follow the source's assertion."""
@@ -113,10 +140,19 @@ class DuplicateCandidate:
     candidate_id: str
     member_ids: tuple[str, ...]
     determination: Determination
+    confidence: MatchConfidence
     merge_performed: bool
     source_asserted_link: str | None
     evidence_for: tuple[Evidence, ...]
     evidence_against: tuple[Evidence, ...]
+    canonical_patient_id: str | None = None
+    """Which record the snapshot is built from. A display choice, not an
+    assertion that the other record is the same person or is superseded."""
+
+    member_resource_ids: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    """Clinical resource ids owned by each member. Nothing is reassigned
+    between members; this records what would be at stake in a merge."""
+
     cross_record_resources: tuple[CrossRecordResource, ...] = field(default_factory=tuple)
     recommended_action: str = "human-steward-review"
 
@@ -486,6 +522,52 @@ def _compare_completeness(a: Patient, b: Patient) -> list[Evidence]:
 # --------------------------------------------------------------------------
 
 
+def _confidence_from(evidence: list[Evidence], link_type: str | None) -> MatchConfidence:
+    """Grade the evidence. Deterministic, order-independent, no thresholds
+    tuned to this particular bundle.
+
+    The precedence is the policy:
+
+    1. A source-asserted `Patient.link` is `CONFIRMED`. Nothing else can be.
+    2. **Conflicting strong identifiers outrank every demographic signal.**
+       Two records issued different identifiers by the same assigning system
+       are two identities as far as that system is concerned, no matter how
+       well the names and addresses line up. This is the rule that stops the
+       bundle's shared-surname, shared-address pair from being merged.
+    3. Only then does a matching high-entropy identifier raise confidence.
+    4. Demographic agreement alone never rises above `POSSIBLE`.
+    """
+    if link_type is not None:
+        return MatchConfidence.CONFIRMED
+
+    signals_against = {e.signal for e in evidence if e.direction is EvidenceDirection.AGAINST}
+    signals_for = {e.signal for e in evidence if e.direction is EvidenceDirection.FOR}
+
+    if signals_against & {
+        "distinct-identifier-same-system",
+        "birthdate-contradictory",
+        "family-name-differs",
+    }:
+        return MatchConfidence.CONFLICTED
+
+    if "identifier-exact-match" in signals_for and any(
+        e.strength is EvidenceStrength.DECISIVE
+        for e in evidence
+        if e.direction is EvidenceDirection.FOR
+    ):
+        return MatchConfidence.PROBABLE
+
+    strong_demographics = signals_for & {
+        "address-match-normalised",
+        "birthdate-exact-match",
+        "telecom-match",
+    }
+    if strong_demographics:
+        return MatchConfidence.POSSIBLE
+
+    return MatchConfidence.INSUFFICIENT
+
+
 def _has_overlap(evidence: list[Evidence]) -> bool:
     """Is there enough demographic agreement to call these a candidate pair at
     all? Below this bar the records are simply different people."""
@@ -503,17 +585,25 @@ class IdentityAnalyzer:
         self._issues = issues
 
     def analyse(
-        self, patients: list[Patient], reference_counts: dict[str, int]
+        self,
+        patients: list[Patient],
+        reference_counts: dict[str, int],
+        resource_ids: dict[str, tuple[str, ...]] | None = None,
     ) -> IdentityAnalysis:
         if not patients:
             return IdentityAnalysis(None, "No Patient resources in the bundle.", (), ())
 
         primary, rationale = self._select_primary(patients, reference_counts)
         candidates: list[DuplicateCandidate] = []
+        owned = resource_ids or {}
 
+        # Deterministic: every unordered pair, in bundle order. With three or
+        # more overlapping records this yields several candidates rather than
+        # collapsing them into one cluster -- clustering would imply a
+        # transitive identity claim the evidence does not support.
         for i, a in enumerate(patients):
             for b in patients[i + 1 :]:
-                candidate = self._compare(a, b)
+                candidate = self._compare(a, b, primary.id, owned)
                 if candidate is not None:
                     candidates.append(candidate)
                     self._report(candidate)
@@ -525,7 +615,13 @@ class IdentityAnalyzer:
             candidates=tuple(candidates),
         )
 
-    def _compare(self, a: Patient, b: Patient) -> DuplicateCandidate | None:
+    def _compare(
+        self,
+        a: Patient,
+        b: Patient,
+        canonical_id: str | None = None,
+        resource_ids: dict[str, tuple[str, ...]] | None = None,
+    ) -> DuplicateCandidate | None:
         link_evidence, link_type = _compare_links(a, b)
         evidence = [
             *link_evidence,
@@ -539,6 +635,8 @@ class IdentityAnalyzer:
         if link_type is None and not _has_overlap(evidence):
             return None
 
+        confidence = _confidence_from(evidence, link_type)
+
         if link_type is not None:
             determination = Determination.SOURCE_ASSERTED_LINK
             merge_performed = True
@@ -546,14 +644,24 @@ class IdentityAnalyzer:
         else:
             determination = Determination.UNRECONCILED
             merge_performed = False
-            action = "human-steward-review"
+            action = (
+                "human-steward-review-identifier-conflict"
+                if confidence is MatchConfidence.CONFLICTED
+                else "human-steward-review"
+            )
 
+        owned = resource_ids or {}
         return DuplicateCandidate(
             candidate_id=f"dup-{a.id}-{b.id}",
             member_ids=(a.id or "", b.id or ""),
             determination=determination,
+            confidence=confidence,
             merge_performed=merge_performed,
             source_asserted_link=link_type,
+            canonical_patient_id=canonical_id,
+            member_resource_ids={
+                member: owned.get(member, ()) for member in (a.id or "", b.id or "")
+            },
             evidence_for=tuple(e for e in evidence if e.direction is EvidenceDirection.FOR),
             evidence_against=tuple(
                 e for e in evidence if e.direction is EvidenceDirection.AGAINST
@@ -570,7 +678,10 @@ class IdentityAnalyzer:
             f"Patient records {' and '.join(candidate.member_ids)} share demographic "
             f"details but the source asserts no link between them and no confirming "
             f"identifier is available. They have not been merged.",
-            detail={"candidateId": candidate.candidate_id},
+            detail={
+                "candidateId": candidate.candidate_id,
+                "confidence": candidate.confidence.value,
+            },
         )
 
     @staticmethod

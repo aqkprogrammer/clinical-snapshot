@@ -6,6 +6,8 @@
  * render when a code has no name, rather than letting `display ?? code` slip in.
  */
 
+export type DisplaySource = "fhir" | "verified-local-map" | "unavailable";
+
 export type DisplayStatus =
   | "from-source"
   | "from-source-unvalidated"
@@ -25,7 +27,8 @@ export interface Coding {
   display: string | null;
   displayStatus: DisplayStatus;
   systemName: string | null;
-  displaySource: string | null;
+  displaySource: DisplaySource;
+  displaySourceDetail: string | null;
   codeSystemMismatch: boolean;
   mismatchReason: string | null;
   usableForCodedLogic: boolean;
@@ -190,10 +193,20 @@ export interface Evidence {
   direction: "for" | "against";
 }
 
+export type MatchConfidence =
+  | "confirmed"
+  | "conflicted"
+  | "probable"
+  | "possible"
+  | "insufficient";
+
 export interface DuplicateCandidate {
   candidateId: string;
   memberIds: string[];
   determination: "source-asserted-link" | "unreconciled" | "distinct";
+  confidence: MatchConfidence;
+  canonicalPatientId: string | null;
+  memberResourceIds: Record<string, string[]>;
   mergePerformed: boolean;
   sourceAssertedLink: string | null;
   evidenceFor: Evidence[];

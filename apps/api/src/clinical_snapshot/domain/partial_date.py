@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 
 # FHIR date / dateTime. Timezone is mandatory when a time is present.
@@ -52,6 +52,33 @@ class PartialDate:
     precision: DatePrecision
 
     # -- construction ------------------------------------------------------
+
+    @property
+    def display(self) -> str:
+        """The string a UI should show. Never more precise than the source."""
+        return self.describe()
+
+    @property
+    def parsed_date(self) -> date | None:
+        """A calendar date, but only where the source actually gave us one.
+
+        `None` for year and month precision. There is no safe date to return
+        for "2019": every candidate is invented. Callers that need ordering use
+        `sort_key`, which is explicit about being an approximation.
+        """
+        if self.precision in (DatePrecision.DAY, DatePrecision.INSTANT):
+            return self.lower_bound.date()
+        return None
+
+    @property
+    def parsed_instant(self) -> datetime | None:
+        """A timezone-aware instant, only for full timestamps.
+
+        FHIR requires an offset whenever a time is present, so this is never
+        naive and never assumes a local timezone.
+        """
+        return self.lower_bound if self.precision is DatePrecision.INSTANT else None
+
 
     @classmethod
     def parse(cls, raw: str | None) -> PartialDate | None:

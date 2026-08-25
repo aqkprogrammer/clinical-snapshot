@@ -31,7 +31,8 @@ class TestPatients:
     def test_exposes_the_duplicate_candidate_with_evidence(self, client: TestClient) -> None:
         candidates = client.get("/api/v1/patients").json()["data"]["duplicateCandidates"]
         assert len(candidates) == 1
-        assert candidates[0]["recommendedAction"] == "human-steward-review"
+        assert candidates[0]["recommendedAction"].startswith("human-steward-review")
+        assert candidates[0]["confidence"] == "conflicted"
 
     def test_preserves_birthdate_precision_in_the_listing(self, client: TestClient) -> None:
         by_id = {

@@ -1,7 +1,12 @@
 """Terminology resolution: the refusal to invent, and code-shape validation."""
 
 from clinical_snapshot.domain.issues import IssueCode, IssueLog
-from clinical_snapshot.domain.terminology import DisplayStatus, TerminologyService
+from clinical_snapshot.domain.terminology import (
+    DisplaySource,
+    DisplayStatus,
+    TerminologyService,
+)
+from clinical_snapshot.fhir.models import CodeableConcept, Coding
 
 SNOMED = "http://snomed.info/sct"
 LOINC = "http://loinc.org"
@@ -72,3 +77,112 @@ class TestSystemNames:
         svc, _ = service()
         assert svc.system_name("http://centaurihealth.example.org/mrn") == "MRN"
         assert svc.system_name("http://example.org/identifiers/encounter") == "encounter"
+
+
+class TestDisplaySource:
+    def test_source_display_is_attributed_to_fhir(self) -> None:
+        svc, _ = service()
+        result = svc.resolve(ICD10, "I10", "Essential (primary) hypertension")
+        assert result.display_source is DisplaySource.FHIR
+
+    def test_curated_display_is_attributed_to_the_local_map_and_cites_it(self) -> None:
+        svc, _ = service()
+        result = svc.resolve(VER_STATUS, "confirmed", None)
+        assert result.display_source is DisplaySource.VERIFIED_LOCAL_MAP
+        assert "condition-ver-status" in (result.display_source_detail or "")
+
+    def test_missing_display_is_attributed_to_nothing(self) -> None:
+        svc, _ = service()
+        result = svc.resolve(LOINC, "4548-4", None)
+        assert result.display_source is DisplaySource.UNAVAILABLE
+        assert result.display_source_detail is None
+
+    def test_unvalidated_display_still_came_from_fhir(self) -> None:
+        """The display is the source's; only the code fails validation."""
+        svc, _ = service()
+        result = svc.resolve(SNOMED, "7980-2", "Penicillin")
+        assert result.display_source is DisplaySource.FHIR
+        assert result.display_status is DisplayStatus.FROM_SOURCE_UNVALIDATED
+
+
+class TestPartialCodings:
+    def test_missing_code_keeps_system_and_display(self) -> None:
+        svc, _ = service()
+        result = svc.resolve(LOINC, None, "Body weight")
+        assert result.code is None
+        assert result.system == LOINC
+        assert result.display == "Body weight"
+        assert result.display_source is DisplaySource.FHIR
+
+    def test_missing_code_without_display_is_unavailable(self) -> None:
+        svc, _ = service()
+        result = svc.resolve(LOINC, None, None)
+        assert result.display is None
+        assert result.display_status is DisplayStatus.UNRESOLVED
+
+    def test_missing_system_preserves_the_code(self) -> None:
+        svc, _ = service()
+        result = svc.resolve(None, "12345", None)
+        assert result.code == "12345"
+        assert result.system is None
+        assert result.display is None
+
+    def test_missing_system_cannot_be_shape_validated(self) -> None:
+        svc, log = service()
+        result = svc.resolve(None, "7980-2", "Penicillin")
+        assert result.code_system_mismatch is False
+        assert result.usable_for_coded_logic is True
+        assert not log.with_code(IssueCode.CODE_SYSTEM_MISMATCH)
+
+    def test_wholly_empty_coding_raises_no_missing_display_issue(self) -> None:
+        """Nothing was recorded, so there is no display to be missing."""
+        svc, log = service()
+        result = svc.resolve(None, None, None)
+        assert result.display is None
+        assert not log.with_code(IssueCode.TERMINOLOGY_DISPLAY_MISSING)
+
+
+class TestMultipleCodings:
+    def test_first_coding_is_primary_and_the_rest_are_retained(self) -> None:
+        svc, _ = service()
+        concept = CodeableConcept(
+            coding=[
+                Coding(system=ICD10, code="E11.9"),
+                Coding(system=SNOMED, code="44054006", display="Type 2 diabetes mellitus"),
+            ]
+        )
+        resolved = svc.resolve_concept(concept)
+        assert resolved.primary.code == "E11.9"
+        assert resolved.has_alternates
+        assert [a.code for a in resolved.alternates] == ["44054006"]
+
+    def test_an_alternate_display_is_never_promoted_onto_the_primary(self) -> None:
+        """The SNOMED translation has a display; the rendered ICD-10 coding does
+        not. Borrowing it across systems would be inventing a label."""
+        svc, _ = service()
+        concept = CodeableConcept(
+            coding=[
+                Coding(system=ICD10, code="E11.9"),
+                Coding(system=SNOMED, code="44054006", display="Type 2 diabetes mellitus"),
+            ]
+        )
+        resolved = svc.resolve_concept(concept)
+        assert resolved.primary.display is None
+        assert resolved.primary.display_status is DisplayStatus.UNRESOLVED
+
+    def test_single_coding_has_no_alternates(self) -> None:
+        svc, _ = service()
+        resolved = svc.resolve_concept(CodeableConcept(coding=[Coding(system=ICD10, code="I10")]))
+        assert resolved.has_alternates is False
+
+    def test_concept_with_no_codings_falls_back_to_its_own_text(self) -> None:
+        svc, _ = service()
+        resolved = svc.resolve_concept(CodeableConcept(text="Patient-reported wheeze"))
+        assert resolved.primary.display == "Patient-reported wheeze"
+        assert resolved.text == "Patient-reported wheeze"
+
+    def test_none_concept_is_handled(self) -> None:
+        svc, _ = service()
+        resolved = svc.resolve_concept(None)
+        assert resolved.primary.display is None
+        assert resolved.has_alternates is False

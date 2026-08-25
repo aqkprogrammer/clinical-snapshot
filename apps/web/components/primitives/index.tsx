@@ -103,10 +103,10 @@ export function CodeLabel({ coding, className }: { coding: Coding; className?: s
           </Badge>
         </>
       ) : null}
-      {coding.displayStatus === "resolved-local" && coding.displaySource ? (
+      {coding.displayStatus === "resolved-local" && coding.displaySourceDetail ? (
         <>
           {" "}
-          <Badge tone="neutral" title={`Display resolved from ${coding.displaySource}`}>
+          <Badge tone="neutral" title={`Display resolved from ${coding.displaySourceDetail}`}>
             spec display
           </Badge>
         </>

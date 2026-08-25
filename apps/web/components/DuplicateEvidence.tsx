@@ -33,8 +33,16 @@ export function DuplicateEvidence({ candidate, rationale }: {
       <div className="drawer-body">
         <p className="section-note" style={{ marginTop: 12 }}>{rationale}</p>
         <p className="small">
-          Determination: <strong>{candidate.determination}</strong> · Recommended action:{" "}
+          Determination: <strong>{candidate.determination}</strong> · Confidence:{" "}
+          <strong>{candidate.confidence}</strong> · Recommended action:{" "}
           <strong>{candidate.recommendedAction.replace(/-/g, " ")}</strong>
+        </p>
+        <p className="small muted">
+          {Object.entries(candidate.memberResourceIds).map(([id, resources]) => (
+            <span key={id} style={{ marginRight: 16 }}>
+              {id}: {resources.length} displayable record{resources.length === 1 ? "" : "s"}
+            </span>
+          ))}
         </p>
         <div className="evidence-cols" style={{ marginTop: 12 }}>
           <div>

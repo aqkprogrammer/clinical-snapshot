@@ -51,10 +51,12 @@ class IssueCode(StrEnum):
 
     # --- Terminology ------------------------------------------------------
     TERMINOLOGY_DISPLAY_MISSING = "TERMINOLOGY_DISPLAY_MISSING"
+    TERMINOLOGY_MULTIPLE_CODINGS = "TERMINOLOGY_MULTIPLE_CODINGS"
     CODE_SYSTEM_MISMATCH = "CODE_SYSTEM_MISMATCH"
 
     # --- Temporal ---------------------------------------------------------
     DATE_PRECISION_REDUCED = "DATE_PRECISION_REDUCED"
+    DATE_INVALID = "DATE_INVALID"
     SNAPSHOT_STALE = "SNAPSHOT_STALE"
 
     # --- Profile / completeness -------------------------------------------
