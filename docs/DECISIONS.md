@@ -279,8 +279,10 @@ Carried deliberately, with reasons, rather than fixed silently:
 - `domain/assembler.py` is ~1,090 lines. It does one job now rather than four,
   and its longest function is 57 lines, but the `_build_*` view constructors
   would sit comfortably behind their own `ViewBuilder`.
-- Accessibility: sections are not exposed as landmarks and clinical rows are
-  `<div>`s rather than lists, so a screen-reader user gets no item count.
+- Accessibility: no automated axe run and no testing with a real screen reader.
+  Long codes and badges clip horizontally below roughly 480px, because
+  `.code-chip` and `.badge` are `white-space: nowrap` with no `overflow-wrap` on
+  their containers.
 
 These are recorded in full in the review sections of the project history.
 

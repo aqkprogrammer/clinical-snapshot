@@ -1,23 +1,54 @@
-# Secrets
+# ---------------------------------------------------------------- secrets --
+# The real .env holds the API key supplied with the assignment. It must never
+# be committed. .env.example is the tracked template and is re-included below.
 .env
-.env.local
+.env.*
+!.env.example
 
-# Python
+# ---------------------------------------------------------------- backend --
 .venv/
+venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.egg-info/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 
-# Node
+# --------------------------------------------------------------- frontend --
 node_modules/
 .next/
 out/
+dist/
+build/
+coverage/
 *.tsbuildinfo
 
-# OS
+# ------------------------------------------------------------------ tests --
+junit*.xml
+
+# ------------------------------------------------------------------- logs --
+*.log
+logs/
+
+# -------------------------------------------------------------------- IDE --
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ------------------------------------------------------------ AI tooling ---
+.claude/
+CLAUDE.md
+
+# --------------------------------------------------------------------- OS --
 .DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db

@@ -27,6 +27,8 @@ Prompts were deliberately staged rather than asking for "build the app":
 5. **Adversarial review** — separate prompts for backend review, accessibility,
    security, and a lead-engineer pass, each explicitly instructed to *list
    findings and stop*, not to fix.
+6. **A UX pass and a submission audit**, again as list-then-approve, so that
+   restyling never happened in the same step as deciding what was wrong.
 
 Splitting "find problems" from "fix problems" mattered. When the same pass does
 both, the fixes justify the findings.
@@ -45,6 +47,9 @@ both, the fixes justify the findings.
   strictly unresolvable.
 - **Mechanical refactors** — promoting private members to a public API surface,
   splitting long functions, rewrapping to the line limit.
+
+This document is the single authoritative record of AI usage on the project; the
+working notes kept during the build were folded into it and removed.
 
 ## Human review
 
@@ -175,6 +180,39 @@ branches. It ran correctly, but `mypy --strict` flagged
 `view.category_declared == "vital-signs"` as a non-overlapping comparison — the
 inferred type was `ConditionView`, whose `category_declared` is a `bool`. Split
 into per-branch names.
+
+### 11. A retracted-data leak introduced by a later feature
+
+Adding `member_resource_ids` to the reconciliation result listed *every* resource
+each patient owned — including the four retracted ones — and that field sits
+inside the snapshot's `data` envelope. Retracted resource ids leaked back into
+the clinician-facing payload.
+
+I did not catch this by reading the diff. `test_no_retracted_id_appears_in_any_clinical_section`
+failed. The fix filters to displayable resources only. This is the second time an
+invariant test caught something review missed, and the strongest argument in the
+repository for writing those tests before adding features.
+
+### 12. The same type error, twice
+
+Refactoring the assembler, I reused one local variable across branches whose
+buckets hold different view types. It ran correctly both times; `mypy --strict`
+rejected it both times — once as a non-overlapping comparison (`bool` vs `str`),
+once as an incompatible assignment. Replaced with explicit per-branch names and a
+comment explaining why the concise version is wrong.
+
+### 13. A safety regression during a purely visual rewrite
+
+Reworking the allergy row for scanability, I replaced the classifier's
+`FlagBadges` with a badge derived from `verificationStatus`. That would have lost
+the authoritative `unconfirmed` marker on `allergyintolerance-003` — a real loss
+of clinical uncertainty introduced by a change that was supposed to be cosmetic.
+A section test failed. `FlagBadges` is restored, with the derived badge
+suppressed whenever a flag would contradict it.
+
+The lesson I took from it: a "presentation-only" change is exactly when safety
+assertions earn their keep, because nobody is reviewing that diff for clinical
+correctness.
 
 ## What I did not delegate
 
