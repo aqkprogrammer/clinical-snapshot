@@ -10,7 +10,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CLINICAL_SNAPSHOT_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="CLINICAL_SNAPSHOT_", env_file=".env", extra="ignore"
+    )
 
     bundle_path: Path = _REPO_ROOT / "data" / "scenario1_fhir_bundle.json"
     """Which bundle to serve. The data directory is scanned for siblings, so

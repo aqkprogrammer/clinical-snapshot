@@ -18,8 +18,10 @@ about *completeness* rather than record status:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import TypeVar
 
 from ..fhir.loader import LoadedBundle
 from ..fhir.models import (
@@ -47,6 +49,14 @@ ETHNICITY_EXT = f"{US_CORE}/us-core-ethnicity"
 BIRTHSEX_EXT = f"{US_CORE}/us-core-birthsex"
 
 VITAL_SIGNS_CATEGORY = "vital-signs"
+
+T = TypeVar("T")
+
+
+def _require(value: PartialDate | None) -> PartialDate:
+    """Narrow an Optional the caller has already filtered on."""
+    assert value is not None
+    return value
 
 
 # --------------------------------------------------------------------------
@@ -265,6 +275,14 @@ class SnapshotAssembler:
 
     # -- public ------------------------------------------------------------
 
+    @property
+    def loaded(self) -> LoadedBundle:
+        return self._loaded
+
+    @property
+    def issues(self) -> IssueLog:
+        return self._issues
+
     def patients(self) -> list[Patient]:
         return [p for p in self._loaded.index.of_type("Patient") if isinstance(p, Patient)]
 
@@ -280,13 +298,18 @@ class SnapshotAssembler:
         identity = self.analyse_identity()
         candidate = identity.candidate_for(patient_id)
 
-        owned = self._resources_for(patient_id)
+        owned = self.resources_for(patient_id)
         classified = [(r, classify(r)) for r in owned]
 
-        conditions_current, conditions_historical = [], []
-        medications_active, medications_historical = [], []
-        allergies_current, allergies_historical = [], []
-        vital_signs, other_observations, encounters = [], [], []
+        conditions_current: list[ConditionView] = []
+        conditions_historical: list[ConditionView] = []
+        medications_active: list[MedicationView] = []
+        medications_historical: list[MedicationView] = []
+        allergies_current: list[AllergyView] = []
+        allergies_historical: list[AllergyView] = []
+        vital_signs: list[ObservationView] = []
+        other_observations: list[ObservationView] = []
+        encounters: list[EncounterView] = []
         needs_review: list[NeedsReviewView] = []
         excluded: list[ExcludedView] = []
 
@@ -314,25 +337,30 @@ class SnapshotAssembler:
             current = classification.disposition is Disposition.CURRENT
 
             if isinstance(resource, Condition):
-                view = self._build_condition(resource, classification)
-                (conditions_current if current else conditions_historical).append(view)
+                condition = self._build_condition(resource, classification)
+                (conditions_current if current else conditions_historical).append(condition)
             elif isinstance(resource, MedicationRequest):
-                view = self._build_medication(resource, classification)
-                (medications_active if current else medications_historical).append(view)
+                medication = self._build_medication(resource, classification)
+                (medications_active if current else medications_historical).append(medication)
             elif isinstance(resource, AllergyIntolerance):
-                view = self._build_allergy(resource, classification)
-                (allergies_current if current else allergies_historical).append(view)
+                allergy = self._build_allergy(resource, classification)
+                (allergies_current if current else allergies_historical).append(allergy)
             elif isinstance(resource, Encounter):
                 encounters.append(self._build_encounter(resource, classification))
             elif isinstance(resource, Observation):
-                view = self._build_observation(resource, classification)
-                blockers = self._observation_blockers(resource, view)
+                observation = self._build_observation(resource, classification)
+                blockers = self._observation_blockers(observation)
+                # Unnameable AND unclassifiable: a bare number with no analyte
+                # and no category invites the reader to supply a meaning we do
+                # not have. One blocker alone still renders, with the caveat.
                 if len(blockers) >= 2:
-                    needs_review.append(self._build_needs_review(resource, blockers, view))
-                elif view.category_declared == VITAL_SIGNS_CATEGORY:
-                    vital_signs.append(view)
+                    needs_review.append(
+                        self._build_needs_review(resource, blockers, observation)
+                    )
+                elif observation.category_declared == VITAL_SIGNS_CATEGORY:
+                    vital_signs.append(observation)
                 else:
-                    other_observations.append(view)
+                    other_observations.append(observation)
 
         cross_record = self._build_cross_record_medications(patient_id, candidate, identity)
         medications_active.extend(cross_record)
@@ -345,7 +373,7 @@ class SnapshotAssembler:
 
         return Snapshot(
             meta=self._build_meta(patient_id, latest, as_of),
-            patient=self._build_patient(patient),
+            patient=self.build_patient_view(patient),
             warnings=tuple(warnings),
             conditions_current=tuple(self._by_recency(conditions_current, lambda c: c.onset)),
             conditions_historical=tuple(self._by_recency(conditions_historical, lambda c: c.onset)),
@@ -391,7 +419,7 @@ class SnapshotAssembler:
                 counts[ref.reference] = counts.get(ref.reference, 0) + 1
         return counts
 
-    def _resources_for(self, patient_id: str) -> list[DomainResource]:
+    def resources_for(self, patient_id: str) -> list[DomainResource]:
         """Resources whose subject resolves to this patient, and only this one.
 
         The scope boundary is enforced here and asserted by the safety suite:
@@ -500,7 +528,10 @@ class SnapshotAssembler:
         )
 
     def _build_medication(
-        self, medication: MedicationRequest, c: Classification, attribution: Attribution | None = None
+        self,
+        medication: MedicationRequest,
+        c: Classification,
+        attribution: Attribution | None = None,
     ) -> MedicationView:
         return MedicationView(
             id=medication.id or "",
@@ -686,9 +717,7 @@ class SnapshotAssembler:
             detail=detail,
         )
 
-    def _observation_blockers(
-        self, observation: Observation, view: ObservationView
-    ) -> tuple[str, ...]:
+    def _observation_blockers(self, view: ObservationView) -> tuple[str, ...]:
         blockers: list[str] = []
         if view.code.display_status is DisplayStatus.UNRESOLVED:
             blockers.append("TERMINOLOGY_DISPLAY_UNRESOLVED")
@@ -736,7 +765,7 @@ class SnapshotAssembler:
                 continue
             other = next((p for p in self.patients() if p.id == other_id), None)
             label = self._patient_label(other) if other else other_id
-            for resource in self._resources_for(other_id):
+            for resource in self.resources_for(other_id):
                 if not isinstance(resource, MedicationRequest):
                     continue
                 classification = classify(resource)
@@ -777,7 +806,7 @@ class SnapshotAssembler:
 
     # -- patient view ------------------------------------------------------
 
-    def _build_patient(self, patient: Patient) -> PatientView:
+    def build_patient_view(self, patient: Patient) -> PatientView:
         name = patient.name[0] if patient.name else None
         address = patient.address[0] if patient.address else None
         return PatientView(
@@ -853,7 +882,12 @@ class SnapshotAssembler:
                 path="Patient.meta.profile",
             )
             return
-        for url, label in ((RACE_EXT, "race"), (ETHNICITY_EXT, "ethnicity"), (BIRTHSEX_EXT, "birthsex")):
+        must_support = (
+            (RACE_EXT, "race"),
+            (ETHNICITY_EXT, "ethnicity"),
+            (BIRTHSEX_EXT, "birthsex"),
+        )
+        for url, label in must_support:
             if not any(e.url == url for e in patient.extension):
                 self._issues.add(
                     IssueCode.USCORE_ELEMENT_MISSING,
@@ -969,9 +1003,14 @@ class SnapshotAssembler:
         return warnings
 
     @staticmethod
-    def _by_recency(items: list, key) -> list:  # type: ignore[type-arg]
-        """Most recent first. Items with no date sort last, in bundle order."""
+    def _by_recency(items: list[T], key: Callable[[T], PartialDate | None]) -> list[T]:
+        """Most recent first. Items with no date sort last, in bundle order.
+
+        Ordering uses the earliest instant a value could denote, so a
+        year-precision date sorts as the start of that year. The precision
+        travels into the payload, so the UI can show which orderings are soft.
+        """
         dated = [i for i in items if key(i) is not None]
         undated = [i for i in items if key(i) is None]
-        dated.sort(key=lambda i: key(i).sort_key(), reverse=True)
+        dated.sort(key=lambda i: _require(key(i)).sort_key(), reverse=True)
         return dated + undated

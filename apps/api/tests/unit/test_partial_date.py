@@ -6,6 +6,7 @@ against the single most tempting bug in this codebase: padding `2019` out to
 from datetime import UTC, datetime
 
 import pytest
+
 from clinical_snapshot.domain.partial_date import DatePrecision, PartialDate
 
 

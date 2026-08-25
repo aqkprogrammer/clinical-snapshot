@@ -113,7 +113,10 @@ class IssueLog:
 
     def all(self) -> list[DataQualityIssue]:
         """Issues ranked by severity, then by code, for stable presentation."""
-        return sorted(self._issues, key=lambda i: (_SEVERITY_ORDER[i.severity], i.code, i.resource_id or ""))
+        return sorted(
+            self._issues,
+            key=lambda i: (_SEVERITY_ORDER[i.severity], i.code, i.resource_id or ""),
+        )
 
     def with_code(self, code: IssueCode) -> list[DataQualityIssue]:
         return [i for i in self._issues if i.code == code]

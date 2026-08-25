@@ -39,7 +39,10 @@ _CODE_SHAPES: dict[str, tuple[re.Pattern[str], str]] = {
     SNOMED: (re.compile(r"^[1-9]\d{5,17}$"), "6-18 digits with no separators"),
     LOINC: (re.compile(r"^\d{1,5}-\d$"), "digits followed by a hyphen and a check digit"),
     RXNORM: (re.compile(r"^\d+$"), "digits only"),
-    ICD10CM: (re.compile(r"^[A-TV-Z]\d[0-9A-Z](?:\.[0-9A-Z]{1,4})?$"), "a letter followed by 2-6 alphanumerics, optionally dotted"),
+    ICD10CM: (
+        re.compile(r"^[A-TV-Z]\d[0-9A-Z](?:\.[0-9A-Z]{1,4})?$"),
+        "a letter followed by 2-6 alphanumerics, optionally dotted",
+    ),
 }
 
 

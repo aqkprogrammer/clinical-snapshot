@@ -8,6 +8,7 @@ wrong suppression mechanism to the user.
 """
 
 import pytest
+
 from clinical_snapshot.domain.safety import Disposition, Flag, classify
 from clinical_snapshot.fhir.models import (
     AllergyIntolerance,

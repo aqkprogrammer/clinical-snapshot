@@ -465,7 +465,9 @@ def _compare_completeness(a: Patient, b: Patient) -> list[Evidence]:
         return len(p.meta.profile) if p.meta else 0
 
     if profile_count(a) != profile_count(b) or len(a.extension) != len(b.extension):
-        sparse = a if (profile_count(a), len(a.extension)) < (profile_count(b), len(b.extension)) else b
+        a_score = (profile_count(a), len(a.extension))
+        b_score = (profile_count(b), len(b.extension))
+        sparse = a if a_score < b_score else b
         return [
             Evidence(
                 signal="completeness-asymmetry",

@@ -7,7 +7,6 @@ evidenced non-merge.
 
 from clinical_snapshot.domain.identity import (
     Determination,
-    EvidenceDirection,
     EvidenceStrength,
     IdentityAnalyzer,
     normalise_address,
@@ -38,7 +37,11 @@ def whitfield_a(**overrides: object) -> Patient:
         "name": [HumanName(family="Whitfield", given=["Dorothy", "M"])],
         "gender": "female",
         "birthDate": "1958-03-12",
-        "address": [Address(line=["482 Larkspur Lane"], city="Springvale", state="OH", postalCode="44011")],
+        "address": [
+            Address(
+                line=["482 Larkspur Lane"], city="Springvale", state="OH", postalCode="44011"
+            )
+        ],
         "telecom": [ContactPoint(system="phone", value="555-014-2231", use="home")],
         "meta": Meta(profile=["http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"]),
     }
@@ -52,7 +55,11 @@ def whitfield_b(**overrides: object) -> Patient:
         "name": [HumanName(family="Whitfield", given=["Dorothy"])],
         "gender": "female",
         "birthDate": "1958",
-        "address": [Address(line=["482 Larkspur Ln"], city="Springvale", state="OH", postalCode="44011")],
+        "address": [
+            Address(
+                line=["482 Larkspur Ln"], city="Springvale", state="OH", postalCode="44011"
+            )
+        ],
         "telecom": [ContactPoint(system="phone", value="555-014-9987", use="mobile")],
     }
     return Patient(**{**base, **overrides})  # type: ignore[arg-type]
@@ -150,7 +157,10 @@ class TestStrongIdentifiers:
         """Even decisive evidence does not authorise the application to merge.
         Only the source system may assert identity."""
         b = whitfield_b(
-            identifier=[Identifier(system=MRN, value="MRN-99999"), Identifier(system=SSN, value="***-**-4471")]
+            identifier=[
+                Identifier(system=MRN, value="MRN-99999"),
+                Identifier(system=SSN, value="***-**-4471"),
+            ]
         )
         result, _ = analyse(whitfield_a(), b)
         assert result.candidates[0].merge_performed is False
@@ -180,7 +190,11 @@ class TestDistinctPeople:
             name=[HumanName(family="Okonkwo", given=["Adaeze"])],
             gender="female",
             birthDate="1991-07-02",
-            address=[Address(line=["9 Cedar Court"], city="Fairhaven", state="OH", postalCode="44100")],
+            address=[
+                Address(
+                    line=["9 Cedar Court"], city="Fairhaven", state="OH", postalCode="44100"
+                )
+            ],
         )
         result, _ = analyse(whitfield_a(), other)
         assert result.candidates == ()

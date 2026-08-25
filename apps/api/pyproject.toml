@@ -29,7 +29,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-clinical_snapshot = ["terminology/*.yaml"]
+clinical_snapshot = ["terminology/*.yaml", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -44,5 +44,6 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["clinical_snapshot.domain"]
+files = ["src/clinical_snapshot/domain"]
+mypy_path = "src"
 strict = true
