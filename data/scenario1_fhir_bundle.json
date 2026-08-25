@@ -1,0 +1,556 @@
+{
+  "resourceType": "Bundle",
+  "id": "scenario1-synthetic-bundle",
+  "type": "collection",
+  "timestamp": "2026-06-01T09:00:00Z",
+  "total": 17,
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:patient-001",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-001",
+        "meta": {
+          "profile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
+          ]
+        },
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
+            "extension": [
+              {
+                "url": "ombCategory",
+                "valueCoding": {
+                  "system": "urn:oid:2.16.840.1.113883.6.238",
+                  "code": "2106-3",
+                  "display": "White"
+                }
+              },
+              { "url": "text", "valueString": "White" }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity",
+            "extension": [
+              {
+                "url": "ombCategory",
+                "valueCoding": {
+                  "system": "urn:oid:2.16.840.1.113883.6.238",
+                  "code": "2186-5",
+                  "display": "Not Hispanic or Latino"
+                }
+              },
+              { "url": "text", "valueString": "Not Hispanic or Latino" }
+            ]
+          }
+        ],
+        "identifier": [
+          {
+            "system": "http://centaurihealth.example.org/mrn",
+            "value": "MRN-48213"
+          },
+          {
+            "system": "http://hl7.org/fhir/sid/us-ssn",
+            "value": "***-**-4471"
+          }
+        ],
+        "active": true,
+        "name": [
+          { "use": "official", "family": "Whitfield", "given": ["Dorothy", "M"] }
+        ],
+        "telecom": [
+          { "system": "phone", "value": "555-014-2231", "use": "home" }
+        ],
+        "gender": "female",
+        "birthDate": "1958-03-12",
+        "address": [
+          {
+            "line": ["482 Larkspur Lane"],
+            "city": "Springvale",
+            "state": "OH",
+            "postalCode": "44011",
+            "country": "US"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:patient-002",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-002",
+        "identifier": [
+          {
+            "system": "http://centaurihealth.example.org/mrn",
+            "value": "MRN-48213-A"
+          }
+        ],
+        "active": true,
+        "name": [
+          { "use": "official", "family": "Whitfield", "given": ["Dorothy"] }
+        ],
+        "telecom": [
+          { "system": "phone", "value": "555-014-9987", "use": "mobile" }
+        ],
+        "gender": "female",
+        "birthDate": "1958",
+        "address": [
+          {
+            "line": ["482 Larkspur Ln"],
+            "city": "Springvale",
+            "state": "OH",
+            "postalCode": "44011"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:encounter-001",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "encounter-001",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "type": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "185349003",
+                "display": "Encounter for check up"
+              }
+            ]
+          }
+        ],
+        "subject": { "reference": "Patient/patient-001" },
+        "period": {
+          "start": "2025-11-04T14:12:00Z",
+          "end": "2025-11-04T14:47:00Z"
+        }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:encounter-002",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "encounter-002",
+        "status": "entered-in-error",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "period": { "start": "2025-09-17T08:00:00Z" }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:condition-001",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-001",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "I10",
+              "display": "Essential (primary) hypertension"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "encounter": { "reference": "Encounter/encounter-001" },
+        "onsetDateTime": "2021-06-02T00:00:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:condition-002",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-002",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "inactive",
+              "display": "Inactive"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "entered-in-error",
+              "display": "Entered in Error"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "J45.909",
+              "display": "Unspecified asthma, uncomplicated"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "onsetDateTime": "2018-01-01T00:00:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:condition-003",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "condition-003",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/sid/icd-10-cm",
+              "code": "E11.9"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "encounter": { "reference": "Encounter/encounter-099" },
+        "onsetDateTime": "2019"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-001",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-001",
+        "status": "final",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "vital-signs",
+                "display": "Vital Signs"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "85354-9",
+              "display": "Blood pressure panel with all children optional"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "encounter": { "reference": "Encounter/encounter-001" },
+        "effectiveDateTime": "2025-11-04T14:15:00Z",
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8480-6",
+                  "display": "Systolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": { "value": 138, "unit": "mmHg", "system": "http://unitsofmeasure.org", "code": "mm[Hg]" }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8462-4",
+                  "display": "Diastolic blood pressure"
+                }
+              ]
+            },
+            "valueQuantity": { "value": 88, "unit": "mmHg", "system": "http://unitsofmeasure.org", "code": "mm[Hg]" }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-002",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-002",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "4548-4"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "effectiveDateTime": "2020",
+        "valueQuantity": { "value": 6.1, "unit": "%", "system": "http://unitsofmeasure.org", "code": "%" }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-003",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-003",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29463-7",
+              "display": "Body weight"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "performer": [{ "reference": "Practitioner/practitioner-999" }],
+        "effectiveDateTime": "2025-11-04T14:10:00Z",
+        "valueQuantity": { "value": 71.2, "unit": "kg", "system": "http://unitsofmeasure.org", "code": "kg" }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-004",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-004",
+        "status": "entered-in-error",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "2160-0",
+              "display": "Creatinine [Mass/volume] in Serum or Plasma"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "effectiveDateTime": "2025-08-22T10:00:00Z",
+        "valueQuantity": { "value": 14.7, "unit": "mg/dL", "system": "http://unitsofmeasure.org", "code": "mg/dL" }
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:medicationrequest-001",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "medicationrequest-001",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "197361",
+              "display": "Lisinopril 10 MG Oral Tablet"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "encounter": { "reference": "Encounter/encounter-001" },
+        "authoredOn": "2025-11-04T15:00:00Z",
+        "dosageInstruction": [
+          { "text": "Take one tablet by mouth once daily" }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:medicationrequest-002",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "medicationrequest-002",
+        "status": "stopped",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "310965",
+              "display": "Metformin 500 MG Oral Tablet"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-001" },
+        "authoredOn": "2022",
+        "dosageInstruction": [
+          { "text": "Twice daily with meals" }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:medicationrequest-003",
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "medicationrequest-003",
+        "status": "active",
+        "intent": "order",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "849574"
+            }
+          ]
+        },
+        "subject": { "reference": "Patient/patient-002" },
+        "authoredOn": "2025-10-01T09:30:00Z",
+        "dosageInstruction": [
+          { "text": "As directed" }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:allergyintolerance-001",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergyintolerance-001",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "7980-2",
+              "display": "Penicillin"
+            }
+          ]
+        },
+        "criticality": "high",
+        "patient": { "reference": "Patient/patient-001" },
+        "recordedDate": "2015-04-11T00:00:00Z"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:allergyintolerance-002",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergyintolerance-002",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "resolved",
+              "display": "Resolved"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "entered-in-error",
+              "display": "Entered in Error"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "300916003",
+              "display": "Latex allergy"
+            }
+          ]
+        },
+        "patient": { "reference": "Patient/patient-001" },
+        "recordedDate": "2016"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:allergyintolerance-003",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "allergyintolerance-003",
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ]
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "unconfirmed",
+              "display": "Unconfirmed"
+            }
+          ]
+        },
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "91936005"
+            }
+          ]
+        },
+        "criticality": "unable-to-assess",
+        "patient": { "reference": "Patient/patient-001" },
+        "recordedDate": "2015"
+      }
+    }
+  ]
+}
