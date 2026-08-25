@@ -5,6 +5,7 @@ help:
 	@echo "make api        run the API on :8000"
 	@echo "make web        run the frontend on :3000"
 	@echo "make test       run the backend test suite"
+	@echo "make test-web   run the frontend test suite"
 	@echo "make check      test + lint + typecheck (backend and frontend)"
 	@echo "make up         run both services with docker compose"
 
@@ -25,6 +26,9 @@ web:
 test:
 	cd apps/api && ../../$(PY) -m pytest tests -q
 
+test-web:
+	cd apps/web && npm test
+
 lint:
 	cd apps/api && ../../$(PY) -m ruff check src tests
 
@@ -32,7 +36,7 @@ typecheck:
 	cd apps/api && ../../$(PY) -m mypy
 	cd apps/web && npx tsc --noEmit
 
-check: test lint typecheck
+check: test test-web lint typecheck
 
 up:
 	docker compose up --build
