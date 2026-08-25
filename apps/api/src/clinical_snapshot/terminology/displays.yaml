@@ -1,0 +1,102 @@
+# Curated code -> display map.
+#
+# SCOPE RULE (see docs/DECISIONS.md):
+#
+#   IN SCOPE  - CodeSystems defined *by the FHIR R4 specification itself*.
+#               These are small, closed, normative, and versioned with FHIR.
+#               Resolving `confirmed` -> "Confirmed" here is reading the
+#               published specification, not recalling a clinical fact.
+#
+#   OUT OF SCOPE - external clinical terminologies: SNOMED CT, LOINC, RxNorm,
+#               ICD-10-CM. These are large, licensed, and separately versioned.
+#               We have no terminology server, so a code from one of these
+#               with no display in the source resolves to null and is rendered
+#               as "code unavailable". Supplying a display from memory is
+#               exactly the failure this assessment is testing for, and in the
+#               allergy case it would manufacture a phantom duplicate.
+#
+# Every block cites its source. Anything not listed here resolves to null.
+
+systems:
+  http://terminology.hl7.org/CodeSystem/condition-clinical:
+    name: Condition Clinical Status
+    source: FHIR R4 CodeSystem condition-clinical (hl7.org/fhir/R4/codesystem-condition-clinical.html)
+    codes:
+      active: Active
+      recurrence: Recurrence
+      relapse: Relapse
+      inactive: Inactive
+      remission: Remission
+      resolved: Resolved
+
+  http://terminology.hl7.org/CodeSystem/condition-ver-status:
+    name: Condition Verification Status
+    source: FHIR R4 CodeSystem condition-ver-status (hl7.org/fhir/R4/codesystem-condition-ver-status.html)
+    codes:
+      unconfirmed: Unconfirmed
+      provisional: Provisional
+      differential: Differential
+      confirmed: Confirmed
+      refuted: Refuted
+      entered-in-error: Entered in Error
+
+  http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical:
+    name: AllergyIntolerance Clinical Status
+    source: FHIR R4 CodeSystem allergyintolerance-clinical
+    codes:
+      active: Active
+      inactive: Inactive
+      resolved: Resolved
+
+  http://terminology.hl7.org/CodeSystem/allergyintolerance-verification:
+    name: AllergyIntolerance Verification Status
+    source: FHIR R4 CodeSystem allergyintolerance-verification
+    codes:
+      unconfirmed: Unconfirmed
+      presumed: Presumed
+      confirmed: Confirmed
+      refuted: Refuted
+      entered-in-error: Entered in Error
+
+  http://terminology.hl7.org/CodeSystem/observation-category:
+    name: Observation Category
+    source: FHIR R4 CodeSystem observation-category
+    codes:
+      social-history: Social History
+      vital-signs: Vital Signs
+      imaging: Imaging
+      laboratory: Laboratory
+      procedure: Procedure
+      survey: Survey
+      exam: Exam
+      therapy: Therapy
+      activity: Activity
+
+  http://terminology.hl7.org/CodeSystem/v3-ActCode:
+    name: HL7 v3 ActCode
+    source: HL7 v3 ActCode, ActEncounterCode subset (terminology.hl7.org/CodeSystem/v3-ActCode)
+    codes:
+      AMB: Ambulatory
+      EMER: Emergency
+      FLD: Field
+      HH: Home Health
+      IMP: Inpatient Encounter
+      ACUTE: Inpatient Acute
+      NONAC: Inpatient Non-Acute
+      OBSENC: Observation Encounter
+      PRENC: Pre-Admission
+      SS: Short Stay
+      VR: Virtual
+
+# External clinical terminologies. Listed so the API can name the system in the
+# UI ("ICD-10-CM E11.9") even when it cannot supply a display for the code.
+external_systems:
+  http://snomed.info/sct: SNOMED CT
+  http://loinc.org: LOINC
+  http://www.nlm.nih.gov/research/umls/rxnorm: RxNorm
+  http://hl7.org/fhir/sid/icd-10-cm: ICD-10-CM
+  http://hl7.org/fhir/sid/icd-10: ICD-10
+  http://www.ama-assn.org/go/cpt: CPT
+  http://unitsofmeasure.org: UCUM
+  http://hl7.org/fhir/sid/us-ssn: US SSN
+  urn:oid:2.16.840.1.113883.6.238: OMB Race and Ethnicity
