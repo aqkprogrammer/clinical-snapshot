@@ -1,4 +1,10 @@
-import { CodeLabel, Empty, FlagBadges, PartialDate } from "@/components/primitives";
+import {
+  CodeCaveat,
+  CodeLabel,
+  Empty,
+  FlagBadges,
+  PartialDate,
+} from "@/components/primitives";
 import type { MedicationItem } from "@/lib/types";
 
 /**
@@ -57,6 +63,7 @@ function Row({ medication }: { medication: MedicationItem }) {
         ) : null}
         <FlagBadges flags={medication.flags} />
       </div>
+      <CodeCaveat coding={medication.medication} />
       <div className="row-meta">
         <span>{medication.dosageText ?? <span className="unknown-value">no dosage recorded</span>}</span>
         <span>Ordered: <PartialDate date={medication.authoredOn} /></span>

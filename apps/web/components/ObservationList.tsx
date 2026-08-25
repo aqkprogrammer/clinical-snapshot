@@ -1,4 +1,11 @@
-import { CodeLabel, Empty, PartialDate, ReferenceLabel, SectionNote } from "@/components/primitives";
+import {
+  CodeCaveat,
+  CodeLabel,
+  Empty,
+  PartialDate,
+  ReferenceLabel,
+  SectionNote,
+} from "@/components/primitives";
 import type { ObservationItem } from "@/lib/types";
 
 /**
@@ -58,6 +65,7 @@ function Row({ observation }: { observation: ObservationItem }) {
         </div>
       ) : null}
 
+      <CodeCaveat coding={observation.code} />
       <div className="row-meta">
         <span><PartialDate date={observation.effective} /></span>
         {observation.categoryDeclared ? (

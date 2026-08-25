@@ -225,6 +225,12 @@ describe("AllergyList", () => {
     expect(container.textContent).toContain("SNOMED CT 91936005 — display unavailable");
   });
 
+  it("shows the mismatch reason as visible text on the row", () => {
+    const { container } = render(<AllergyList current={[allergy()]} historical={[]} />);
+    expect(container.querySelector(".code-caveat")).not.toBeNull();
+    expect(container.textContent).toContain("not a well-formed identifier for SNOMED CT");
+  });
+
   it("states that entries are not de-duplicated when a code fails validation", () => {
     render(<AllergyList current={[allergy()]} historical={[]} />);
     expect(screen.getByText(/not.*de-duplicated/)).toBeInTheDocument();

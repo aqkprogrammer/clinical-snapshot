@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from clinical_snapshot.domain.snapshot import NormalizationResult, SnapshotAssembler
+from clinical_snapshot.domain.assembler import SnapshotAssembler
+from clinical_snapshot.domain.snapshot import NormalizationResult
 from clinical_snapshot.fhir.loader import load_bundle
 
 AS_OF = datetime(2026, 8, 25, tzinfo=UTC)

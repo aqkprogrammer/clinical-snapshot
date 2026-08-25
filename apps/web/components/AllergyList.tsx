@@ -1,4 +1,12 @@
-import { Badge, CodeLabel, Empty, FlagBadges, PartialDate, SectionNote } from "@/components/primitives";
+import {
+  Badge,
+  CodeCaveat,
+  CodeLabel,
+  Empty,
+  FlagBadges,
+  PartialDate,
+  SectionNote,
+} from "@/components/primitives";
 import type { AllergyItem } from "@/lib/types";
 
 export function AllergyList({ current, historical }: {
@@ -50,6 +58,7 @@ function Row({ allergy }: { allergy: AllergyItem }) {
         ) : null}
         <FlagBadges flags={allergy.flags} />
       </div>
+      <CodeCaveat coding={allergy.code} />
       <div className="row-meta">
         <span>Recorded: <PartialDate date={allergy.recordedDate} /></span>
         <span>Status: {allergy.clinicalStatus?.display ?? "unknown"}</span>

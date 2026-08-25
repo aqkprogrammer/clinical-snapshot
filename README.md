@@ -23,7 +23,7 @@ make web      # http://localhost:3000
 ```
 
 ```bash
-make check    # 344 backend + 69 frontend tests, ruff, mypy --strict, tsc --noEmit
+make check    # 360 backend + 75 frontend tests, ruff, mypy --strict, tsc --noEmit
 make test     # backend only        make test-web  # frontend only
 make lint     # ruff                make typecheck # mypy + tsc
 ```
@@ -173,7 +173,10 @@ data/*.json
 ```
 
 `apps/api/src/clinical_snapshot/domain/` is pure and I/O-free, which is what
-makes the safety properties cheap to test exhaustively. `fhir/models.py` models
+makes the safety properties cheap to test exhaustively. Within it, `views.py`
+holds the shapes we are willing to render, `snapshot.py` the read model
+(`Snapshot` + `NormalizationResult`), `renderability.py` the rule for whether an
+Observation can be identified at all, and `assembler.py` the construction. `fhir/models.py` models
 what the source *sent*; `schemas/responses.py` models what we are willing to
 *say*. Keeping them apart is what stops a raw FHIR field reaching the client
 without passing through classification.
@@ -279,6 +282,7 @@ The data is synthetic; the handling is what's being assessed.
   outbound network calls and needs no API key to run.**
 - **CORS** is an explicit two-origin localhost allowlist with `GET` only and no
   credentials — never a wildcard.
+- **Both containers run unprivileged** — `snapshot` (uid 10001) and `node`.
 
 - **Path parameters are validated against the FHIR `id` charset**
   (`[A-Za-z0-9\-.]{1,64}`), so anything else is rejected as 422 before a handler
@@ -287,12 +291,12 @@ The data is synthetic; the handling is what's being assessed.
 
 **Known gaps, deliberately out of scope:** no authentication, authorization or
 rate limiting — any caller can read any patient. No security headers
-(`X-Content-Type-Options`, CSP). Containers run as root. These are the first
-things to fix before this went anywhere real.
+(`X-Content-Type-Options`, CSP). These are the first things to fix before this
+went anywhere real.
 
 ## Testing
 
-344 backend and 69 frontend tests. The ones that matter are in `apps/api/tests/safety/`, which
+360 backend and 75 frontend tests. The ones that matter are in `apps/api/tests/safety/`, which
 asserts properties that must hold for **any** bundle, against the serialized
 HTTP payload rather than domain objects:
 
@@ -328,16 +332,14 @@ build — see `AI_USAGE.md`.
 - **The curated terminology map is small.** Correctness and auditability over
   coverage. A real ValueSet/`$lookup` integration slots in behind
   `TerminologyService` without touching callers.
-- **`domain/snapshot.py` is 1,270 lines** and should be split into `views` /
-  `assembler` / `result`. Mechanical, and deferred under the time cap.
 - **`/excluded` and `/data-quality` re-run the pipeline** rather than deriving
   from one `NormalizationResult`, and use `build()` rather than `normalize()`.
-- **Observation routing uses a `len(blockers) >= 2` threshold** that counts date
-  precision as a renderability blocker. It gives the right answer for this
-  bundle and is not coherent in general.
-- **Accessibility beyond focus and boundaries.** Sections are not exposed as
-  landmarks, clinical rows are `<div>`s rather than lists, and some mismatch
-  reasons live only in `title` attributes. Listed in full in the project history.
+- **`domain/assembler.py` is still ~1,090 lines.** It now does one job rather
+  than four, and its longest function is 57 lines, but the ~15 `_build_*` view
+  constructors would sit comfortably behind their own `ViewBuilder`.
+- **Accessibility beyond focus, boundaries and contrast.** Sections are not
+  exposed as landmarks and clinical rows are `<div>`s rather than lists, so a
+  screen-reader user gets no item count. Listed in full in the project history.
 - **Single bundle, configured by path.** Multi-scenario support is a config
   change, not an abstraction.
 - **`_shorten` for unknown identifier systems** turns

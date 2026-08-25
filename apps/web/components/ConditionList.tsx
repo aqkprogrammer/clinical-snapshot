@@ -1,4 +1,12 @@
-import { CodeLabel, Empty, FlagBadges, PartialDate, ReferenceLabel, SectionNote } from "@/components/primitives";
+import {
+  CodeCaveat,
+  CodeLabel,
+  Empty,
+  FlagBadges,
+  PartialDate,
+  ReferenceLabel,
+  SectionNote,
+} from "@/components/primitives";
 import type { ConditionItem } from "@/lib/types";
 
 export function ConditionList({ current, historical, categoryDeclared }: {
@@ -39,6 +47,7 @@ function Row({ condition }: { condition: ConditionItem }) {
         <span className="row-title"><CodeLabel coding={condition.code} /></span>
         <FlagBadges flags={condition.flags} />
       </div>
+      <CodeCaveat coding={condition.code} />
       <div className="row-meta">
         <span>Onset: <PartialDate date={condition.onset} /></span>
         <span>Status: {condition.clinicalStatus?.display ?? "unknown"}</span>

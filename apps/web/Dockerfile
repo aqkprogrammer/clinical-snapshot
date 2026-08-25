@@ -16,5 +16,10 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/next.config.ts ./next.config.ts
+
+# node:alpine ships an unprivileged `node` user; use it rather than root.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 CMD ["npx", "next", "start", "-p", "3000"]

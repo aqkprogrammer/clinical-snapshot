@@ -18,8 +18,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from ..domain.assembler import SnapshotAssembler
 from ..domain.issues import DataQualityIssue, IssueLog
-from ..domain.snapshot import NormalizationResult, Snapshot, SnapshotAssembler
+from ..domain.snapshot import NormalizationResult, Snapshot
 from ..fhir.loader import load_bundle
 from ..fhir.models import Patient
 from ..logging_config import log_event

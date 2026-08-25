@@ -98,9 +98,7 @@ export function CodeLabel({ coding, className }: { coding: Coding; className?: s
       {coding.displayStatus === "from-source-unvalidated" ? (
         <>
           {" "}
-          <Badge tone="danger" title={coding.mismatchReason ?? undefined}>
-            code / system mismatch
-          </Badge>
+          <Badge tone="danger">code / system mismatch</Badge>
         </>
       ) : null}
       {coding.displayStatus === "resolved-local" && coding.displaySourceDetail ? (
@@ -112,6 +110,25 @@ export function CodeLabel({ coding, className }: { coding: Coding; className?: s
         </>
       ) : null}
     </span>
+  );
+}
+
+/**
+ * The reason a code failed validation, rendered visibly.
+ *
+ * This used to live only in the badge's `title`. A tooltip is unreachable by
+ * keyboard, absent on touch, and inconsistently announced by screen readers --
+ * which is not acceptable for the explanation of why a clinical label cannot
+ * be trusted. The badge stays as the scannable marker; this is the substance.
+ */
+export function CodeCaveat({ coding }: { coding: Coding }) {
+  if (!coding.codeSystemMismatch || !coding.mismatchReason) return null;
+  return (
+    <p className="code-caveat">
+      <strong>Unvalidated label.</strong> {coding.mismatchReason}. The name shown was
+      supplied by the source and has not been checked against {coding.systemName ?? "its code system"};
+      the code is excluded from any coded matching.
+    </p>
   );
 }
 

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   Badge,
+  CodeCaveat,
   CodeLabel,
   Empty,
   FlagBadges,
@@ -85,6 +86,12 @@ describe("CodeLabel", () => {
     expect(screen.getByText("Penicillin")).toBeInTheDocument();
   });
 
+  it("no longer hides the mismatch reason in a tooltip", () => {
+    const { container } = render(<CodeLabel coding={mismatchedCoding} />);
+    const badge = container.querySelector(".badge-danger");
+    expect(badge?.getAttribute("title")).toBeNull();
+  });
+
   it("attributes a display resolved from the curated map", () => {
     render(
       <CodeLabel
@@ -97,6 +104,29 @@ describe("CodeLabel", () => {
       />,
     );
     expect(screen.getByText("spec display")).toBeInTheDocument();
+  });
+});
+
+describe("CodeCaveat", () => {
+  it("renders the mismatch reason as visible text, not a tooltip", () => {
+    const { container } = render(<CodeCaveat coding={mismatchedCoding} />);
+    expect(container.textContent).toContain("not a well-formed identifier for SNOMED CT");
+    expect(container.textContent).toContain("Unvalidated label");
+  });
+
+  it("explains that the code is excluded from coded matching", () => {
+    const { container } = render(<CodeCaveat coding={mismatchedCoding} />);
+    expect(container.textContent).toContain("excluded from any coded matching");
+  });
+
+  it("renders nothing for a code that validates", () => {
+    const { container } = render(<CodeCaveat coding={coding()} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("renders nothing for an unresolved code that is otherwise well formed", () => {
+    const { container } = render(<CodeCaveat coding={undisplayedCoding} />);
+    expect(container.firstChild).toBeNull();
   });
 });
 

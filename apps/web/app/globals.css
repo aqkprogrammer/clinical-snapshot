@@ -15,7 +15,9 @@
   --surface: #ffffff;
   --ink: #10151c;
   --ink-soft: #3d4956;
-  --muted: #6b7784;
+  /* 5.44:1 on --surface, 5.02:1 on --bg. The previous #6b7784 was 4.22:1
+     against the page background, below the 4.5 AA threshold for body text. */
+  --muted: #5f6b78;
   --line: #dde3e9;
   --line-strong: #c3ccd6;
 
@@ -174,6 +176,17 @@ h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
   white-space: nowrap;
 }
 .precision-hint { color: var(--unknown); font-style: italic; }
+
+.code-caveat {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-left: 2px solid var(--danger-line);
+  padding: 6px 10px;
+  border-radius: 0 4px 4px 0;
+  margin: 8px 0 0;
+}
 
 /* -- attribution --------------------------------------------------------- */
 

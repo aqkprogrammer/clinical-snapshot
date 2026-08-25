@@ -274,17 +274,13 @@ logged at any level.
 
 Carried deliberately, with reasons, rather than fixed silently:
 
-- `domain/snapshot.py` is 1,270 lines and should be split into `views` /
-  `assembler` / `result`. Mechanical; deferred under the time cap.
 - `/excluded` and `/data-quality` re-run the pipeline via `build()` rather than
   `normalize()`, so they do not populate `unresolved_references`.
-- Observation routing uses a `len(blockers) >= 2` threshold that treats date
-  precision as a renderability blocker. It happens to give the right answer for
-  this bundle, and is incoherent in general.
-- Accessibility beyond focus styles and the loading/error boundaries: sections
-  are not exposed as landmarks, clinical rows are `<div>`s rather than lists,
-  `--muted` on the page background is 4.22:1 against a 4.5 target, and some
-  code-mismatch reasons live only in `title` attributes.
+- `domain/assembler.py` is ~1,090 lines. It does one job now rather than four,
+  and its longest function is 57 lines, but the `_build_*` view constructors
+  would sit comfortably behind their own `ViewBuilder`.
+- Accessibility: sections are not exposed as landmarks and clinical rows are
+  `<div>`s rather than lists, so a screen-reader user gets no item count.
 
 These are recorded in full in the review sections of the project history.
 
