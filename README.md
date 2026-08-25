@@ -41,6 +41,51 @@ specific day.
 - **A clinician-oriented UI** where uncertainty is a first-class visual system
   rather than an afterthought.
 
+## Screenshots
+
+### The snapshot
+
+![Clinical snapshot for patient-001](docs/screenshots/01-snapshot-overview.png)
+
+Everything a clinician needs is in the first viewport. Note what the page is
+careful about:
+
+- **`ICD-10-CM E11.9 — display unavailable`** — the source supplied no name for
+  this code, so none is shown. It is not guessed.
+- **`Onset 2019 (year only)`** — the precision the source recorded, not widened
+  to a specific day.
+- **`Code failed validation — the name shown is as recorded by the source`** —
+  "Penicillin" is exactly what the record says, but its code is not a
+  well-formed SNOMED CT identifier, so the code is barred from any matching.
+- **`FROM POSSIBLE DUPLICATE — MRN-48213-A`** — an active medication belonging to
+  a record that may or may not be the same person. Shown, attributed, and
+  explicitly *not* counted as this patient's.
+- **`Encounter: unresolved (Encounter/encounter-099 not present in bundle)`** —
+  distinct from "no encounter recorded".
+- **`Retracted at source 4`** — four resources were withdrawn by the source.
+  They are listed for transparency and appear in no clinical section.
+
+### Scope isolation — the second record
+
+![Snapshot for the possible duplicate record](docs/screenshots/02-duplicate-record.png)
+
+The same application viewing `MRN-48213-A`. This is the clearest demonstration
+that the two Patient records are **not merged**: this record has 0 active
+problems, 0 allergies and no vital signs of its own, and Lisinopril — which is
+the *other* record's medication — appears here under the same attributed block,
+in the opposite direction. Its date of birth also renders as
+`1958 (year only)`, which is precisely why a day-level identity match could
+never be established.
+
+### API
+
+![Health endpoint](docs/screenshots/03-api-health.png)
+
+![OpenAPI documentation](docs/screenshots/04-api-docs.png)
+
+Generated OpenAPI at `/docs`, covering all five endpoints and every response
+schema.
+
 ## Architecture
 
 ```
@@ -112,6 +157,7 @@ clinical-snapshot/
 │   └── scenario1_fhir_bundle.json the supplied bundle, unmodified
 ├── docs/
 │   ├── DECISIONS.md               rule tables, evidence analysis, open items
+│   ├── screenshots/               images used by this README
 │   └── assignment-brief.pdf       the original brief, for context
 └── apps/
     ├── api/                       Python · FastAPI · Pydantic
