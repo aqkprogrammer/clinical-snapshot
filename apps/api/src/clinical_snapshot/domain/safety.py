@@ -74,19 +74,6 @@ class ExclusionReason(StrEnum):
     """The source actively disproved the assertion."""
 
 
-@dataclass(frozen=True, slots=True)
-class ExcludedResource:
-    """A resource withheld from every clinical section, and why."""
-
-    resource_id: str
-    resource_type: str
-    reason: ExclusionReason
-    suppression_field: str
-    """The element that carried the retraction. Recorded because Condition and
-    AllergyIntolerance retract via verificationStatus while Observation and
-    Encounter use status, and a reader deserves to know which."""
-
-
 class Flag(StrEnum):
     """Caveats that travel with a resource that is otherwise displayable."""
 
