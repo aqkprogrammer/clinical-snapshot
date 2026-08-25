@@ -3,11 +3,15 @@ import {
   CodeLabel,
   Empty,
   FlagBadges,
+  InfoNote,
   PartialDate,
   ReferenceLabel,
-  SectionNote,
+  SectionHead,
+  sectionId,
 } from "@/components/primitives";
 import type { ConditionItem } from "@/lib/types";
+
+const TITLE = "Active problems";
 
 export function ConditionList({ current, historical, categoryDeclared }: {
   current: ConditionItem[];
@@ -15,26 +19,43 @@ export function ConditionList({ current, historical, categoryDeclared }: {
   categoryDeclared: boolean;
 }) {
   return (
-    <section className="card">
-      <h2>Conditions</h2>
-      {!categoryDeclared ? (
-        <SectionNote>
-          No source record declares <code>Condition.category</code>, so these cannot be
-          identified as problem-list items or encounter diagnoses. This is not a problem list.
-        </SectionNote>
-      ) : null}
+    <section className="card" aria-labelledby={sectionId(TITLE)}>
+      <SectionHead
+        title={TITLE}
+        note={
+          !categoryDeclared ? (
+            <InfoNote label="not a formal problem list">
+              No source record declares <code>Condition.category</code>, so these cannot be
+              identified as problem-list items or encounter diagnoses. They are the conditions
+              the source recorded as active, nothing more.
+            </InfoNote>
+          ) : undefined
+        }
+      />
 
       {current.length === 0 ? (
         <Empty>No active conditions recorded.</Empty>
       ) : (
-        current.map((condition) => <Row key={condition.id} condition={condition} />)
+        <ul className="rows">
+          {current.map((condition) => (
+            <li key={condition.id}>
+              <Row condition={condition} />
+            </li>
+          ))}
+        </ul>
       )}
 
       {historical.length > 0 ? (
-        <>
-          <h3 style={{ marginTop: 18 }} className="muted">Resolved / inactive</h3>
-          {historical.map((condition) => <Row key={condition.id} condition={condition} />)}
-        </>
+        <div className="subordinate">
+          <div className="subordinate-title">Resolved / inactive</div>
+          <ul className="rows">
+            {historical.map((condition) => (
+              <li key={condition.id}>
+                <Row condition={condition} />
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </section>
   );
@@ -47,15 +68,15 @@ function Row({ condition }: { condition: ConditionItem }) {
         <span className="row-title"><CodeLabel coding={condition.code} /></span>
         <FlagBadges flags={condition.flags} />
       </div>
-      <CodeCaveat coding={condition.code} />
       <div className="row-meta">
-        <span>Onset: <PartialDate date={condition.onset} /></span>
-        <span>Status: {condition.clinicalStatus?.display ?? "unknown"}</span>
-        <span>
-          Verification: {condition.verificationStatus?.display ?? "unknown"}
-        </span>
-        <span>Encounter: <ReferenceLabel reference={condition.encounter} /></span>
+        <span>Onset <PartialDate date={condition.onset} /></span>
+        <span>{condition.clinicalStatus?.display ?? "status unknown"}</span>
+        <span>{condition.verificationStatus?.display ?? "verification unknown"}</span>
+        {condition.encounter ? (
+          <span>Encounter: <ReferenceLabel reference={condition.encounter} /></span>
+        ) : null}
       </div>
+      <CodeCaveat coding={condition.code} />
     </div>
   );
 }

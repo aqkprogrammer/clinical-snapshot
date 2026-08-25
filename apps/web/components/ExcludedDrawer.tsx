@@ -13,10 +13,9 @@ export function ExcludedDrawer({ items, note }: { items: ExcludedItem[]; note: s
   return (
     <details className="drawer">
       <summary>
-        Retracted at source — {items.length} record{items.length === 1 ? "" : "s"}
-        <span className="badge badge-danger" style={{ marginLeft: 6 }}>
-          not current clinical facts
-        </span>
+        Retracted at source
+        <span className="chip chip-danger">{items.length}</span>
+        <span className="badge badge-danger">not current clinical facts</span>
       </summary>
       <div className="drawer-body">
         <p className="section-note" style={{ marginTop: 12 }}>{note}</p>

@@ -56,7 +56,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-.page { max-width: 1180px; margin: 0 auto; padding: 24px 20px 72px; }
+.page { max-width: 1220px; margin: 0 auto; padding: 16px 20px 64px; }
 
 /* -- typography ---------------------------------------------------------- */
 
@@ -71,7 +71,7 @@ h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
 
 /* -- layout -------------------------------------------------------------- */
 
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
 .card {
@@ -79,9 +79,19 @@ h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
 }
+
+/* Section heading + its optional info affordance on one line. */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.section-head h2 { margin: 0; }
 
 .section-note {
   font-size: 12.5px;
@@ -91,6 +101,28 @@ h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
   padding: 6px 10px;
   border-radius: 0 4px 4px 0;
   margin: 0 0 12px;
+}
+
+/*
+ * A section caveat, folded. The short label stays visible so the caveat is
+ * never lost; only the full explanation is behind the disclosure.
+ */
+.note { font-size: 12px; }
+.note > summary {
+  cursor: pointer; list-style: none; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+}
+.note > summary::-webkit-details-marker { display: none; }
+.note > summary::before {
+  content: "i"; font-family: var(--mono); font-size: 10px; font-weight: 700;
+  width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-strong);
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+}
+.note > summary:hover { color: var(--ink-soft); }
+.note > p {
+  margin: 8px 0 0; color: var(--muted); background: var(--unknown-bg);
+  border-left: 2px solid var(--line-strong); padding: 7px 10px;
+  border-radius: 0 4px 4px 0; line-height: 1.5; white-space: normal;
 }
 
 /* -- rows ---------------------------------------------------------------- */
@@ -111,30 +143,92 @@ h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px 20px;
-  margin-bottom: 16px;
+  padding: 13px 18px;
+  margin-bottom: 10px;
 }
-.patient-facts { display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 12px; }
-.fact-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+
+/*
+ * Identity first, on one line, in the order a clinician confirms a patient:
+ * who, sex, age, date of birth, record number.
+ */
+.id-line {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.id-name { font-size: 23px; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+.id-facts {
+  display: flex; align-items: baseline; gap: 0 10px; flex-wrap: wrap;
+  font-size: 14.5px; color: var(--ink-soft);
+}
+.id-facts .sep { color: var(--line-strong); }
+.id-facts strong { color: var(--ink); font-weight: 600; }
+.id-mrn { font-family: var(--mono); font-size: 13px; }
+
+/* Three dates that mean three different things, labelled so they cannot be
+   confused with one another. */
+.freshness {
+  display: flex; flex-wrap: wrap; gap: 4px 22px;
+  margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.freshness-item { display: flex; align-items: baseline; gap: 6px; }
+.freshness-label {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.freshness-value { color: var(--ink-soft); font-weight: 600; }
+.freshness-age { color: var(--warn); font-weight: 600; }
+
+.patient-facts { display: flex; flex-wrap: wrap; gap: 10px 26px; margin-top: 10px; }
+.fact-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
               color: var(--muted); display: block; }
-.fact-value { font-size: 14px; }
+.fact-value { font-size: 13.5px; }
+
+/* At-a-glance counts. Derived from what is already rendered -- no new data. */
+.glance {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 9px 16px; margin-bottom: 14px; font-size: 13.5px;
+}
+.glance a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
+.glance a:hover { border-bottom-color: var(--line-strong); }
+.glance strong { font-size: 15px; }
+.glance .sep { color: var(--line-strong); margin: 0 6px; }
+.glance-flag { color: var(--danger); font-weight: 600; }
 
 /* -- banners ------------------------------------------------------------- */
 
 .banner {
   border-radius: var(--radius);
-  padding: 13px 16px;
-  margin-bottom: 12px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
   border: 1px solid;
   display: flex;
-  gap: 11px;
+  gap: 10px;
   align-items: flex-start;
 }
+.banner-main { flex: 1; min-width: 0; }
+.banner-line { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+/* The reasoning folds away; the headline and the actionable fact do not. */
+.banner details { display: inline; }
+.banner details > summary {
+  cursor: pointer; font-size: 11.5px; font-weight: 700; color: inherit;
+  opacity: 0.8; list-style: none; display: inline-flex; align-items: center; gap: 3px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.banner details > summary::-webkit-details-marker { display: none; }
+.banner details > summary::after { content: "▸"; font-size: 10px; }
+.banner details[open] > summary::after { content: "▾"; }
+.banner details > summary:hover { opacity: 1; }
+.banner details p { margin: 5px 0 0; font-size: 12.5px; color: var(--ink-soft); }
 .banner-high   { background: var(--danger-bg); border-color: var(--danger-line); color: var(--danger); }
 .banner-medium { background: var(--warn-bg);   border-color: var(--warn-line);   color: var(--warn); }
 .banner-icon { font-size: 16px; line-height: 1.3; }
-.banner-title { font-weight: 700; font-size: 13.5px; margin-bottom: 2px; }
+.banner-title { font-weight: 700; font-size: 13px; text-transform: uppercase;
+                letter-spacing: 0.03em; }
 .banner-body { color: var(--ink-soft); font-size: 13.5px; }
+.banner-icon { font-size: 15px; line-height: 1.25; }
 
 /* -- badges -------------------------------------------------------------- */
 
@@ -178,29 +272,93 @@ h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
 .precision-hint { color: var(--unknown); font-style: italic; }
 
 .code-caveat {
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--danger);
   background: var(--danger-bg);
   border-left: 2px solid var(--danger-line);
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-radius: 0 4px 4px 0;
-  margin: 8px 0 0;
+  margin: 7px 0 0;
 }
+.code-caveat > summary {
+  cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 6px;
+  flex-wrap: wrap;
+}
+.code-caveat > summary::-webkit-details-marker { display: none; }
+.code-caveat > summary::after { content: "details \25B8"; font-size: 10.5px; opacity: 0.75; }
+.code-caveat[open] > summary::after { content: "details \25BE"; }
+.code-caveat > p { margin: 6px 0 2px; color: var(--ink-soft); }
 
 /* -- attribution --------------------------------------------------------- */
 
+/* Three medication groups that must never be mistaken for one another. */
+.med-group { margin-top: 14px; }
+.med-group:first-of-type { margin-top: 4px; }
+.med-group-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
+  padding-bottom: 5px; border-bottom: 1px solid var(--line); margin-bottom: 2px;
+}
+.med-group-current { color: var(--ok); }
+.med-group-stopped { color: var(--muted); }
+.med-group-note { font-weight: 500; text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+
 .attributed {
-  border-left: 3px solid var(--warn-line);
+  border-left: 3px solid var(--warn);
   background: var(--warn-bg);
-  padding: 11px 13px;
+  padding: 10px 12px;
   border-radius: 0 4px 4px 0;
-  margin-top: 10px;
+  margin-top: 8px;
 }
+.attributed .row { border-top: none; padding-top: 4px; }
 .attribution-note {
-  font-size: 12px; color: var(--warn); font-weight: 600;
-  display: block; margin-bottom: 7px;
+  font-size: 11px; color: var(--warn); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
 }
+.attribution-detail {
+  font-size: 12px; color: var(--warn); font-weight: 500;
+  text-transform: none; letter-spacing: 0; display: block; margin-top: 3px;
+}
+.stopped-row .row-title { color: var(--muted); }
+
+.obs-value { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; margin: 4px 0 1px; }
+.obs-value .unknown-value { font-size: 15px; font-weight: 400; }
+
+/* Grouped secondary results: readable values, and the queue that is not. */
+.subordinate {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-strong);
+}
+.subordinate-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--unknown); display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
+}
+.review-why { font-size: 12.5px; color: var(--muted); margin: 4px 0 0; }
+.review-reasons { margin: 5px 0 0; padding-left: 17px; font-size: 12.5px; color: var(--muted); }
+
+/* -- record integrity ---------------------------------------------------- */
+
+.integrity-head {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin: 22px 0 8px;
+}
+.chip {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 11px;
+  border: 1px solid var(--line); background: #eef1f4; color: var(--ink-soft);
+}
+.chip-danger { background: var(--danger-bg); border-color: var(--danger-line); color: var(--danger); }
+.chip-warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn); }
+
+.severity-group { margin-top: 10px; }
+.severity-group > summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+  padding: 7px 0; font-size: 13px; font-weight: 600; border-top: 1px solid var(--line);
+}
+.severity-group > summary::-webkit-details-marker { display: none; }
+.severity-group > summary::before { content: "▸"; color: var(--muted); font-size: 11px; }
+.severity-group[open] > summary::before { content: "▾"; }
 
 /* -- disclosure ---------------------------------------------------------- */
 
@@ -241,6 +399,25 @@ details.drawer > summary:hover { background: #fafbfc; }
 .issue-row:first-of-type { border-top: none; }
 .issue-code { font-family: var(--mono); font-size: 11px; color: var(--muted);
               word-break: break-all; margin-top: 3px; }
+
+/* Semantic lists for clinical rows: a screen reader announces the item count,
+   which on a medication list is information in its own right. */
+ul.rows { list-style: none; margin: 0; padding: 0; }
+ul.rows > li { margin: 0; }
+
+.skip-link {
+  position: absolute; left: -9999px; top: 0; z-index: 10;
+  background: var(--surface); color: var(--accent); font-weight: 600;
+  padding: 10px 16px; border: 1px solid var(--accent); border-radius: 0 0 var(--radius) 0;
+}
+.skip-link:focus { left: 0; }
+
+.record-switch {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-top: 18px; font-size: 12.5px;
+}
+.record-switch a { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.record-switch a.current { color: var(--accent); font-weight: 700; }
 
 /* -- screen-reader only --------------------------------------------------- */
 

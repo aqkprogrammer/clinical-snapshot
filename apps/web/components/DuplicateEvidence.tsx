@@ -15,19 +15,21 @@ const STRENGTH_TONE: Record<string, string> = {
  * The evidence on both sides of the identity question, so a reviewer can see
  * why the records were not merged and make the call themselves.
  */
-export function DuplicateEvidence({ candidate, rationale }: {
+export function DuplicateEvidence({ candidate, rationale, labels = {} }: {
   candidate: DuplicateCandidate;
   rationale: string;
+  /** Record id -> the number a clinician recognises, e.g. an MRN. */
+  labels?: Record<string, string>;
 }) {
   return (
     <details className="drawer">
       <summary>
-        Identity analysis — {candidate.memberIds.join(" vs ")}
-        <span
-          className={`badge ${candidate.mergePerformed ? "badge-ok" : "badge-warn"}`}
-          style={{ marginLeft: 6 }}
-        >
+        Identity analysis
+        <span className={`chip ${candidate.mergePerformed ? "" : "chip-warn"}`}>
           {candidate.mergePerformed ? "reconciled by source" : "not merged"}
+        </span>
+        <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>
+          why these records were not combined
         </span>
       </summary>
       <div className="drawer-body">
@@ -40,9 +42,13 @@ export function DuplicateEvidence({ candidate, rationale }: {
         <p className="small muted">
           {Object.entries(candidate.memberResourceIds).map(([id, resources]) => (
             <span key={id} style={{ marginRight: 16 }}>
-              {id}: {resources.length} displayable record{resources.length === 1 ? "" : "s"}
+              {labels[id] ?? id}: {resources.length} displayable record
+              {resources.length === 1 ? "" : "s"}
             </span>
           ))}
+        </p>
+        <p className="small muted" style={{ marginTop: 10 }}>
+          The evidence below is the system&apos;s own record of the decision, quoted verbatim.
         </p>
         <div className="evidence-cols" style={{ marginTop: 12 }}>
           <div>

@@ -17,8 +17,9 @@ import { DuplicateEvidence } from "@/components/DuplicateEvidence";
 import { EncounterList } from "@/components/EncounterList";
 import { ExcludedDrawer } from "@/components/ExcludedDrawer";
 import { MedicationList } from "@/components/MedicationList";
-import { NeedsReviewList } from "@/components/NeedsReviewList";
 import { ObservationList } from "@/components/ObservationList";
+import { OtherResults } from "@/components/OtherResults";
+import { GlanceStrip } from "@/components/GlanceStrip";
 import { PatientHeader } from "@/components/PatientHeader";
 import type { DuplicateCandidate, SnapshotMeta } from "@/lib/types";
 import {
@@ -63,15 +64,55 @@ describe("PatientHeader", () => {
     expect(container.textContent).not.toContain("SSN");
   });
 
-  it("shows a missing US Core birthsex as not recorded", () => {
+  it("still reports a missing US Core birthsex", () => {
     render(<PatientHeader patient={patient()} meta={meta} />);
     const facts = screen.getByText("Birth sex (US Core)").parentElement;
     expect(facts?.textContent).toContain("not recorded");
   });
 
-  it("surfaces the data-as-of date", () => {
+  it("labels the three dates distinctly so they cannot be confused", () => {
     const { container } = render(<PatientHeader patient={patient()} meta={meta} />);
-    expect(container.textContent).toContain("2026-06-01");
+    expect(container.textContent).toContain("Record exported");
+    expect(container.textContent).toContain("01 Jun 2026");
+    expect(container.textContent).toContain("Last clinical activity");
+    expect(container.textContent).toContain("04 Nov 2025");
+    expect(container.textContent).toContain("293 days ago");
+    expect(container.textContent).toContain("Page rendered");
+  });
+
+  it("shows a derived age for a day-precision birth date", () => {
+    const { container } = render(<PatientHeader patient={patient()} meta={meta} />);
+    expect(container.textContent).toMatch(/\d+y/);
+  });
+
+  it("shows no age when the birth date is year-only", () => {
+    const { container } = render(
+      <PatientHeader
+        patient={patient({ birthDate: { value: "1958", precision: "year" } })}
+        meta={meta}
+      />,
+    );
+    expect(container.textContent).not.toMatch(/\b\d+y\b/);
+    expect(container.textContent).toContain("(year only)");
+  });
+
+  it("leads with identity: name, sex, DOB and MRN", () => {
+    const { container } = render(<PatientHeader patient={patient()} meta={meta} />);
+    const idLine = container.querySelector(".id-facts");
+    expect(idLine?.textContent).toContain("female");
+    expect(idLine?.textContent).toContain("12 Mar 1958");
+    expect(idLine?.textContent).toContain("MRN-48213");
+  });
+
+  it("folds demographics away without removing them", () => {
+    const { container } = render(<PatientHeader patient={patient()} meta={meta} />);
+    const details = Array.from(container.querySelectorAll("details")).find((d) =>
+      d.textContent?.includes("Ethnicity"),
+    );
+    expect(details).toBeDefined();
+    expect(details?.hasAttribute("open")).toBe(false);
+    expect(details?.textContent).toContain("Not Hispanic or Latino");
+    expect(details?.textContent).toContain("482 Larkspur Lane");
   });
 
   it("flags a record that makes no profile claim", () => {
@@ -81,20 +122,56 @@ describe("PatientHeader", () => {
 });
 
 describe("Banners", () => {
+  const duplicateWarning = {
+    code: "DUPLICATE_CANDIDATE_UNRECONCILED",
+    severity: "high" as const,
+    message:
+      "A possible duplicate Patient record (patient-002) shares this patient's name, sex, " +
+      "address and birth year. The source system asserts no link between them.",
+    detail: {},
+  };
+
   it("renders the unreconciled-duplicate warning prominently", () => {
-    render(
+    render(<Banners warnings={[duplicateWarning]} />);
+    expect(screen.getByText("Possible duplicate record")).toBeInTheDocument();
+  });
+
+  it("uses a record number a clinician recognises, not a database id", () => {
+    const { container } = render(
       <Banners
-        warnings={[
-          {
-            code: "DUPLICATE_CANDIDATE_UNRECONCILED",
-            severity: "high",
-            message: "A possible duplicate Patient record shares this patient's name.",
-            detail: {},
-          },
-        ]}
+        warnings={[duplicateWarning]}
+        duplicate={{ label: "MRN-48213-A", medicationCount: 1 }}
       />,
     );
-    expect(screen.getByText("Possible duplicate record — not reconciled")).toBeInTheDocument();
+    // Scoped to what is visible while the disclosure is collapsed.
+    const headline = container.querySelector(".banner-summary");
+    expect(headline?.textContent).toContain("MRN-48213-A");
+    expect(headline?.textContent).not.toContain("patient-002");
+  });
+
+  it("keeps the actionable fact in the headline", () => {
+    const { container } = render(
+      <Banners
+        warnings={[duplicateWarning]}
+        duplicate={{ label: "MRN-48213-A", medicationCount: 1 }}
+      />,
+    );
+    const headline = container.querySelector(".banner-summary");
+    expect(headline?.textContent).toContain("1 active medication");
+    expect(headline?.textContent).toContain("not merged");
+  });
+
+  it("folds the reasoning away but does not delete it", () => {
+    const { container } = render(<Banners warnings={[duplicateWarning]} />);
+    const why = container.querySelector("details");
+    expect(why?.hasAttribute("open")).toBe(false);
+    expect(why?.textContent).toContain("asserts no link");
+  });
+
+  it("uses a polite role rather than an assertive alert", () => {
+    const { container } = render(<Banners warnings={[duplicateWarning]} />);
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("renders nothing when there are no warnings", () => {
@@ -104,9 +181,17 @@ describe("Banners", () => {
 });
 
 describe("ConditionList", () => {
-  it("declares that the source did not say whether these are problem-list items", () => {
-    render(<ConditionList current={[condition()]} historical={[]} categoryDeclared={false} />);
-    expect(screen.getByText(/This is not a problem list/)).toBeInTheDocument();
+  it("keeps the not-a-problem-list caveat visible as a label", () => {
+    const { container } = render(
+      <ConditionList current={[condition()]} historical={[]} categoryDeclared={false} />,
+    );
+    expect(screen.getByText("not a formal problem list")).toBeInTheDocument();
+    expect(container.textContent).toContain("Condition.category");
+  });
+
+  it("omits the caveat entirely when the source did declare a category", () => {
+    render(<ConditionList current={[condition()]} historical={[]} categoryDeclared />);
+    expect(screen.queryByText("not a formal problem list")).toBeNull();
   });
 
   it("renders a condition with no display without inventing one", () => {
@@ -139,6 +224,30 @@ describe("ConditionList", () => {
 });
 
 describe("MedicationList", () => {
+  it("labels the three groups so they cannot be confused", () => {
+    const { container } = render(
+      <MedicationList
+        active={[
+          medication(),
+          medication({
+            id: "m3",
+            attribution: {
+              patientId: "patient-002",
+              patientLabel: "MRN-48213-A",
+              candidateId: "d",
+              note: "NOT confirmed.",
+            },
+          }),
+        ]}
+        historical={[medication({ id: "m2", status: "stopped" })]}
+      />,
+    );
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText(/From possible duplicate/)).toBeInTheDocument();
+    expect(screen.getByText("Stopped")).toBeInTheDocument();
+    expect(container.textContent).toContain("not current — do not treat as active");
+  });
+
   it("keeps a stopped medication out of the active list", () => {
     render(
       <MedicationList
@@ -152,7 +261,7 @@ describe("MedicationList", () => {
         ]}
       />,
     );
-    expect(screen.getByText("No longer active — do not treat as current")).toBeInTheDocument();
+    expect(screen.getByText("Stopped")).toBeInTheDocument();
   });
 
   it("attributes a duplicate record's medication instead of absorbing it", () => {
@@ -197,7 +306,7 @@ describe("MedicationList", () => {
 describe("AllergyList", () => {
   it("shows high criticality prominently", () => {
     render(<AllergyList current={[allergy()]} historical={[]} />);
-    expect(screen.getByText("high criticality")).toBeInTheDocument();
+    expect(screen.getByText("high risk")).toBeInTheDocument();
   });
 
   it("marks an unconfirmed allergy as uncertain but still shows it", () => {
@@ -233,7 +342,15 @@ describe("AllergyList", () => {
 
   it("states that entries are not de-duplicated when a code fails validation", () => {
     render(<AllergyList current={[allergy()]} historical={[]} />);
-    expect(screen.getByText(/not.*de-duplicated/)).toBeInTheDocument();
+    expect(screen.getByText("entries not de-duplicated")).toBeInTheDocument();
+  });
+
+  it("puts severity and verification beside the substance name", () => {
+    const { container } = render(<AllergyList current={[allergy()]} historical={[]} />);
+    const head = container.querySelector(".row-head");
+    expect(head?.textContent).toContain("Penicillin");
+    expect(head?.textContent).toContain("high risk");
+    expect(head?.textContent).toContain("confirmed");
   });
 
   it("does not equate an empty list with no known allergies", () => {
@@ -250,9 +367,16 @@ describe("ObservationList", () => {
     expect(container.textContent).toContain("138 mmHg / 88 mmHg");
   });
 
+  it("leads with the value so it scans first", () => {
+    const { container } = render(
+      <ObservationList title="Vital signs" observations={[observation()]} emptyText="none" />,
+    );
+    expect(container.querySelector(".obs-value")?.textContent).toContain("138 mmHg / 88 mmHg");
+  });
+
   it("states that no values are flagged because no reference ranges exist", () => {
     render(<ObservationList title="Vital signs" observations={[observation()]} emptyText="none" />);
-    expect(screen.getByText(/no values are.*flagged as high, low, or abnormal/)).toBeInTheDocument();
+    expect(screen.getByText("no reference ranges")).toBeInTheDocument();
   });
 
   it("never renders an abnormal indicator on the value row", () => {
@@ -321,28 +445,98 @@ describe("EncounterList", () => {
   });
 });
 
-describe("NeedsReviewList", () => {
-  it("explains why an item is not shown as a clinical result", () => {
-    render(
-      <NeedsReviewList
-        items={[
-          {
-            id: "observation-002",
-            resourceType: "Observation",
-            reasons: ["TERMINOLOGY_DISPLAY_UNRESOLVED", "OBSERVATION_CATEGORY_ABSENT"],
-            summary: "LOINC 4548-4 (display unavailable)",
-            detail: "The analyte cannot be named and the measurement cannot be classified.",
-          },
-        ]}
-      />,
-    );
-    expect(screen.getByText(/not shown as clinical results/i)).toBeInTheDocument();
-    expect(screen.getByText("no human-readable name for the code")).toBeInTheDocument();
+describe("OtherResults", () => {
+  const reviewItem = {
+    id: "observation-002",
+    resourceType: "Observation",
+    reasons: ["TERMINOLOGY_DISPLAY_UNRESOLVED", "OBSERVATION_CATEGORY_ABSENT"],
+    summary: "LOINC 4548-4 (display unavailable)",
+    detail: "The analyte cannot be named and the measurement cannot be classified.",
+  };
+
+  it("keeps a readable observation as a result, not in the review queue", () => {
+    const weight = observation({
+      id: "observation-003",
+      categoryDeclared: null,
+      components: [],
+      value: 71.2,
+      unit: "kg",
+      code: coding({ code: "29463-7", display: "Body weight", systemName: "LOINC" }),
+    });
+    const { container } = render(<OtherResults observations={[weight]} needsReview={[]} />);
+    expect(container.querySelector(".obs-value")?.textContent).toContain("71.2 kg");
+    expect(container.querySelector(".subordinate")).toBeNull();
   });
 
-  it("renders nothing when there is nothing to review", () => {
-    const { container } = render(<NeedsReviewList items={[]} />);
+  it("groups the review queue underneath, clearly subordinate", () => {
+    const { container } = render(<OtherResults observations={[]} needsReview={[reviewItem]} />);
+    const subordinate = container.querySelector(".subordinate");
+    expect(subordinate).not.toBeNull();
+    expect(subordinate?.textContent).toContain("Needs review — not presented as results");
+  });
+
+  it("explains why each item requires review", () => {
+    render(<OtherResults observations={[]} needsReview={[reviewItem]} />);
+    expect(
+      screen.getByText("the code has no human-readable name in the source"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("no category, so the kind of measurement is unknown"),
+    ).toBeInTheDocument();
+  });
+
+  it("states that nothing was silently dropped", () => {
+    const { container } = render(<OtherResults observations={[]} needsReview={[reviewItem]} />);
+    expect(container.textContent).toContain("nothing is silently dropped");
+  });
+
+  it("renders both groups together when both are present", () => {
+    const { container } = render(
+      <OtherResults observations={[observation()]} needsReview={[reviewItem]} />,
+    );
+    expect(container.querySelector(".obs-value")).not.toBeNull();
+    expect(container.querySelector(".subordinate")).not.toBeNull();
+  });
+
+  it("renders nothing at all when there is neither", () => {
+    const { container } = render(<OtherResults observations={[]} needsReview={[]} />);
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("GlanceStrip", () => {
+  const data = {
+    conditionsCurrent: [condition(), condition({ id: "c2" })],
+    medicationsActive: [
+      medication(),
+      medication({
+        id: "m3",
+        attribution: { patientId: "p2", patientLabel: "MRN-48213-A", candidateId: "d", note: "" },
+      }),
+    ],
+    allergiesCurrent: [allergy(), allergy({ id: "a2", criticality: "low", flags: ["unconfirmed"] })],
+    needsReview: [
+      { id: "o2", resourceType: "Observation", reasons: [], summary: "s", detail: "d" },
+    ],
+  } as never;
+
+  it("counts the duplicate record's medication separately, never in the active total", () => {
+    const { container } = render(<GlanceStrip data={data} issueCount={30} />);
+    expect(container.textContent).toContain("1 active medication");
+    expect(container.textContent).toContain("+ 1 from possible duplicate");
+  });
+
+  it("surfaces high-criticality allergies at a glance", () => {
+    const { container } = render(<GlanceStrip data={data} issueCount={30} />);
+    expect(container.textContent).toContain("2 allergies");
+    expect(container.textContent).toContain("(1 high)");
+    expect(container.textContent).toContain("1 unconfirmed");
+  });
+
+  it("reports the review queue and the issue count", () => {
+    const { container } = render(<GlanceStrip data={data} issueCount={30} />);
+    expect(container.textContent).toContain("1 needs review");
+    expect(container.textContent).toContain("30 data-quality issues");
   });
 });
 

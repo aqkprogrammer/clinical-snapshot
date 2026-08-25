@@ -4,16 +4,24 @@ import {
   Empty,
   FlagBadges,
   PartialDate,
+  SectionHead,
+  sectionId,
 } from "@/components/primitives";
 import type { MedicationItem } from "@/lib/types";
 
+const TITLE = "Medications";
+
 /**
- * Active and historical medications are separated structurally, not by a badge.
- * A stopped drug must never appear in the same visual list as a current one.
+ * Three groups that must never be mistaken for one another.
  *
- * Medications belonging to an unreconciled duplicate record appear in their own
- * attributed block below the subject's own list -- shown, because hiding an
- * active order is also a safety failure, but never mixed in.
+ * Each carries a persistent label rather than relying on position or colour
+ * alone, because "which of these is the patient actually taking?" is the
+ * question this card exists to answer:
+ *
+ *   CURRENT                  the subject's own active orders
+ *   FROM POSSIBLE DUPLICATE  another record's active order, attributed, never
+ *                            counted as this patient's
+ *   STOPPED                  real history, explicitly not current
  */
 export function MedicationList({ active, historical }: {
   active: MedicationItem[];
@@ -23,39 +31,64 @@ export function MedicationList({ active, historical }: {
   const attributed = active.filter((m) => m.attribution);
 
   return (
-    <section className="card">
-      <h2>Medications</h2>
+    <section className="card" aria-labelledby={sectionId(TITLE)}>
+      <SectionHead title={TITLE} />
 
-      <h3>Active</h3>
-      {own.length === 0 ? <Empty>No active medications recorded.</Empty> : null}
-      {own.map((medication) => <Row key={medication.id} medication={medication} />)}
+      <div className="med-group">
+        <div className="med-group-label med-group-current">
+          <span>Current</span>
+          <span className="med-group-note">taken by this patient</span>
+        </div>
+        {own.length === 0 ? (
+          <Empty>No active medications recorded.</Empty>
+        ) : (
+          <ul className="rows">
+            {own.map((medication) => (
+              <li key={medication.id}>
+                <Row medication={medication} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {attributed.map((medication) => (
         <div key={medication.id} className="attributed">
-          <span className="attribution-note">
-            {"⚠"} From {medication.attribution?.patientLabel} — a possible duplicate
-            record. Same-person status is NOT confirmed, so this is not counted as this
-            patient&apos;s medication.
-          </span>
+          <div className="attribution-note">
+            <span aria-hidden>⚠</span>
+            <span>From possible duplicate — {medication.attribution?.patientLabel}</span>
+            <span className="attribution-detail">
+              Same-person status is <strong>NOT confirmed</strong>, so this is not counted as
+              this patient&apos;s medication. Shown because omitting an active order would be
+              unsafe if the records do turn out to match.
+            </span>
+          </div>
           <Row medication={medication} />
         </div>
       ))}
 
       {historical.length > 0 ? (
-        <>
-          <h3 style={{ marginTop: 18 }} className="muted">
-            No longer active — do not treat as current
-          </h3>
-          {historical.map((medication) => <Row key={medication.id} medication={medication} />)}
-        </>
+        <div className="med-group">
+          <div className="med-group-label med-group-stopped">
+            <span>Stopped</span>
+            <span className="med-group-note">not current — do not treat as active</span>
+          </div>
+          <ul className="rows">
+            {historical.map((medication) => (
+              <li key={medication.id}>
+                <Row medication={medication} stopped />
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </section>
   );
 }
 
-function Row({ medication }: { medication: MedicationItem }) {
+function Row({ medication, stopped = false }: { medication: MedicationItem; stopped?: boolean }) {
   return (
-    <div className="row">
+    <div className={stopped ? "row stopped-row" : "row"}>
       <div className="row-head">
         <span className="row-title"><CodeLabel coding={medication.medication} /></span>
         {medication.status && medication.status !== "active" ? (
@@ -63,11 +96,13 @@ function Row({ medication }: { medication: MedicationItem }) {
         ) : null}
         <FlagBadges flags={medication.flags} />
       </div>
-      <CodeCaveat coding={medication.medication} />
       <div className="row-meta">
-        <span>{medication.dosageText ?? <span className="unknown-value">no dosage recorded</span>}</span>
-        <span>Ordered: <PartialDate date={medication.authoredOn} /></span>
+        <span>
+          {medication.dosageText ?? <span className="unknown-value">no dosage recorded</span>}
+        </span>
+        <span>Ordered <PartialDate date={medication.authoredOn} /></span>
       </div>
+      <CodeCaveat coding={medication.medication} />
     </div>
   );
 }

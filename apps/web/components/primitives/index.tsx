@@ -124,11 +124,18 @@ export function CodeLabel({ coding, className }: { coding: Coding; className?: s
 export function CodeCaveat({ coding }: { coding: Coding }) {
   if (!coding.codeSystemMismatch || !coding.mismatchReason) return null;
   return (
-    <p className="code-caveat">
-      <strong>Unvalidated label.</strong> {coding.mismatchReason}. The name shown was
-      supplied by the source and has not been checked against {coding.systemName ?? "its code system"};
-      the code is excluded from any coded matching.
-    </p>
+    <details className="code-caveat">
+      <summary>
+        <strong>Code failed validation</strong>
+        <span>— the name shown is as recorded by the source</span>
+      </summary>
+      <p>
+        {coding.mismatchReason}. The name is displayed exactly as the source record supplied
+        it and is not in question; it is the <em>code</em> that cannot be verified against{" "}
+        {coding.systemName ?? "its code system"}, so the code is excluded from any coded
+        matching.
+      </p>
+    </details>
   );
 }
 
@@ -204,4 +211,37 @@ export function Empty({ children }: { children: React.ReactNode }) {
 
 export function SectionNote({ children }: { children: React.ReactNode }) {
   return <p className="section-note">{children}</p>;
+}
+
+/**
+ * A section-level caveat, folded.
+ *
+ * The short `label` always stays on screen, so the caveat itself is never
+ * hidden -- only the full explanation is behind the disclosure. This keeps
+ * paragraphs of provenance prose out of the first viewport without costing the
+ * reader the warning.
+ */
+export function InfoNote({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <details className="note">
+      <summary>{label}</summary>
+      <p>{children}</p>
+    </details>
+  );
+}
+
+/** Section heading with an optional folded caveat beside it. */
+export function SectionHead({ title, note }: { title: string; note?: React.ReactNode }) {
+  const id = `sec-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  return (
+    <div className="section-head">
+      <h2 id={id}>{title}</h2>
+      {note}
+    </div>
+  );
+}
+
+/** Stable id for a section heading, so <section> can point at it. */
+export function sectionId(title: string): string {
+  return `sec-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }

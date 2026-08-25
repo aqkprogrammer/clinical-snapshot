@@ -1,14 +1,13 @@
 import { AllergyList } from "@/components/AllergyList";
-import { Banners } from "@/components/Banners";
+import { Banners, type DuplicateContext } from "@/components/Banners";
 import { ConditionList } from "@/components/ConditionList";
-import { DataQualityPanel } from "@/components/DataQualityPanel";
-import { DuplicateEvidence } from "@/components/DuplicateEvidence";
 import { EncounterList } from "@/components/EncounterList";
-import { ExcludedDrawer } from "@/components/ExcludedDrawer";
+import { GlanceStrip } from "@/components/GlanceStrip";
 import { MedicationList } from "@/components/MedicationList";
-import { NeedsReviewList } from "@/components/NeedsReviewList";
 import { ObservationList } from "@/components/ObservationList";
+import { OtherResults } from "@/components/OtherResults";
 import { PatientHeader } from "@/components/PatientHeader";
+import { RecordIntegrity } from "@/components/RecordIntegrity";
 import { ApiUnavailableError, fetchExcluded, fetchPatients, fetchSnapshot } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -43,75 +42,96 @@ export default async function Page({
     const { data, meta, issues } = snapshot;
     const candidate = data.identity.candidates.find((c) => c.memberIds.includes(patientId));
 
+    // A record number a clinician recognises, taken from the attribution the
+    // backend already supplies -- never a database id.
+    const attributed = data.medicationsActive.filter((m) => m.attribution);
+    const duplicate: DuplicateContext | undefined = candidate
+      ? {
+          label: attributed[0]?.attribution?.patientLabel ?? "another record",
+          medicationCount: attributed.length,
+        }
+      : undefined;
+
+    // Record ids are how the API addresses patients; a clinician reads MRNs.
+    const recordLabels = Object.fromEntries(
+      patients.data.patients.map((p) => [p.id, p.identifiers[0]?.value ?? p.id]),
+    );
+
     return (
-      <main className="page">
-        {available.length > 1 ? (
-          <nav className="small muted" style={{ marginBottom: 12 }}>
-            Patient records in this bundle:{" "}
-            {patients.data.patients.map((p) => (
-              <a
-                key={p.id}
-                href={`/?patient=${p.id}`}
-                style={{
-                  marginRight: 10,
-                  fontWeight: p.id === patientId ? 700 : 400,
-                  color: p.id === patientId ? "var(--accent)" : "var(--muted)",
-                }}
-              >
-                {p.display} ({p.identifiers[0]?.value ?? p.id})
-              </a>
-            ))}
-            <span title={meta.scopeNote}> · records are never merged</span>
-          </nav>
-        ) : null}
+      <>
+        <a href="#clinical" className="skip-link">Skip to clinical content</a>
+        <main className="page">
+          <PatientHeader patient={data.patient} meta={meta} />
+          <Banners warnings={data.warnings} duplicate={duplicate} />
+          <GlanceStrip data={data} issueCount={issues.length} />
 
-        <PatientHeader patient={data.patient} meta={meta} />
-        <Banners warnings={data.warnings} />
-
-        <div className="grid">
-          <div>
-            <ConditionList
-              current={data.conditionsCurrent}
-              historical={data.conditionsHistorical}
-              categoryDeclared={data.conditionsCategoryDeclared}
-            />
-            <MedicationList
-              active={data.medicationsActive}
-              historical={data.medicationsHistorical}
-            />
-            <EncounterList encounters={data.encounters} />
+          {/*
+            * Two columns, ordered by how a clinician scans: allergies and
+            * medications on the left (what could harm the patient, what they
+            * are taking), problems and vitals on the right. Secondary results
+            * fill the right column so the two sides finish at similar heights.
+            */}
+          <div id="clinical" className="grid">
+            <div>
+              <AllergyList
+                current={data.allergiesCurrent}
+                historical={data.allergiesHistorical}
+              />
+              <MedicationList
+                active={data.medicationsActive}
+                historical={data.medicationsHistorical}
+              />
+            </div>
+            <div>
+              <ConditionList
+                current={data.conditionsCurrent}
+                historical={data.conditionsHistorical}
+                categoryDeclared={data.conditionsCategoryDeclared}
+              />
+              <ObservationList
+                title="Vital signs"
+                observations={data.vitalSigns}
+                emptyText="No vital signs recorded."
+              />
+              <EncounterList encounters={data.encounters} />
+              <OtherResults
+                observations={data.otherObservations}
+                needsReview={data.needsReview}
+              />
+            </div>
           </div>
-          <div>
-            <AllergyList current={data.allergiesCurrent} historical={data.allergiesHistorical} />
-            <ObservationList
-              title="Vital signs"
-              observations={data.vitalSigns}
-              emptyText="No vital signs recorded."
-            />
-            <ObservationList
-              title="Other observations"
-              observations={data.otherObservations}
-              emptyText="No other observations recorded."
-            />
-            <NeedsReviewList items={data.needsReview} />
-          </div>
-        </div>
 
-        {candidate ? (
-          <DuplicateEvidence
+          <RecordIntegrity
+            excluded={excluded.data.excluded}
+            excludedNote={excluded.data.note}
             candidate={candidate}
             rationale={data.identity.primarySelectionRationale}
+            issues={issues}
+            recordLabels={recordLabels}
           />
-        ) : null}
-        <ExcludedDrawer items={excluded.data.excluded} note={excluded.data.note} />
-        <DataQualityPanel issues={issues} />
 
-        <footer className="small muted" style={{ marginTop: 26, textAlign: "center" }}>
-          Bundle <span className="mono">{meta.bundleId}</span> · generated{" "}
-          {meta.generatedAt.slice(0, 19).replace("T", " ")} UTC ·{" "}
-          {meta.daysSinceLatestActivity} days since last clinical activity
-        </footer>
-      </main>
+          {available.length > 1 ? (
+            <nav className="record-switch" aria-label="Patient records in this bundle">
+              <span className="muted">Records in this bundle:</span>
+              {patients.data.patients.map((p) => (
+                <a
+                  key={p.id}
+                  href={`/?patient=${p.id}`}
+                  aria-current={p.id === patientId ? "page" : undefined}
+                  className={p.id === patientId ? "current" : undefined}
+                >
+                  {p.identifiers[0]?.value ?? p.id}
+                </a>
+              ))}
+              <span className="muted" title={meta.scopeNote}>· never merged</span>
+            </nav>
+          ) : null}
+
+          <footer className="small muted" style={{ marginTop: 18, textAlign: "center" }}>
+            Bundle <span className="mono">{meta.bundleId}</span>
+          </footer>
+        </main>
+      </>
     );
   } catch (error) {
     if (error instanceof ApiUnavailableError) {

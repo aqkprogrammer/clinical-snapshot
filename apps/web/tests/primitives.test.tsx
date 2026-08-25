@@ -111,7 +111,15 @@ describe("CodeCaveat", () => {
   it("renders the mismatch reason as visible text, not a tooltip", () => {
     const { container } = render(<CodeCaveat coding={mismatchedCoding} />);
     expect(container.textContent).toContain("not a well-formed identifier for SNOMED CT");
-    expect(container.textContent).toContain("Unvalidated label");
+  });
+
+  it("blames the code, not the label", () => {
+    // The source-supplied name must not read as fabricated: it is the code
+    // that failed validation, and the name is shown exactly as recorded.
+    const { container } = render(<CodeCaveat coding={mismatchedCoding} />);
+    expect(container.textContent).toContain("Code failed validation");
+    expect(container.textContent).toContain("as recorded by the source");
+    expect(container.textContent).not.toContain("Unvalidated label");
   });
 
   it("explains that the code is excluded from coded matching", () => {
