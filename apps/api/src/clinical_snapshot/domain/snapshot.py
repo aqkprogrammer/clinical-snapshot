@@ -42,9 +42,16 @@ from ..fhir.resolver import (
     ResolutionStatus,
 )
 from .identity import DuplicateCandidate, IdentityAnalysis, IdentityAnalyzer
-from .issues import IssueCode, IssueLog, Severity
+from .issues import DataQualityIssue, IssueCode, IssueLog, Severity
 from .partial_date import PartialDate
-from .safety import Classification, Disposition, Flag, classify
+from .safety import (
+    Classification,
+    Disposition,
+    ExclusionReason,
+    Flag,
+    allergy_prominence,
+    classify,
+)
 from .terminology import DisplayStatus, ResolvedCoding, TerminologyService
 
 _RESOLUTION_ISSUES: dict[ResolutionStatus, tuple[IssueCode, Severity]] = {
@@ -59,6 +66,13 @@ ETHNICITY_EXT = f"{US_CORE}/us-core-ethnicity"
 BIRTHSEX_EXT = f"{US_CORE}/us-core-birthsex"
 
 VITAL_SIGNS_CATEGORY = "vital-signs"
+
+# Identifier systems that never leave the backend. A clinical snapshot needs a
+# medical record number to be useful -- it is how a duplicate record is named
+# to a reviewer -- but it has no use for a national identifier, so the SSN is
+# withheld rather than merely masked. The count of withheld identifiers is
+# reported so the omission is visible instead of looking like absent data.
+SUPPRESSED_IDENTIFIER_SYSTEMS = frozenset({"http://hl7.org/fhir/sid/us-ssn"})
 
 T = TypeVar("T")
 
@@ -175,7 +189,7 @@ class EncounterView:
 class ExcludedView:
     id: str
     resource_type: str
-    suppression_reason: str
+    suppression_reason: ExclusionReason
     suppression_field: str | None
     summary: str
     value_withheld: bool = False
@@ -223,6 +237,7 @@ class PatientView:
     telecom: tuple[tuple[str, str], ...]
     profiles_claimed: tuple[str, ...]
     us_core: UsCoreExtensions
+    withheld_identifier_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +261,31 @@ class SnapshotMeta:
 
 
 @dataclass(frozen=True, slots=True)
+class UnresolvedReferenceRecord:
+    """A reference that could not be used, and the element it came from.
+
+    Collected separately from the issue log so a consumer can enumerate broken
+    links without filtering issue codes.
+    """
+
+    source_resource_id: str | None
+    source_resource_type: str
+    path: str
+    reference: str
+    status: str
+    reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class Conflict:
+    """A contradiction the source left unresolved, surfaced rather than settled."""
+
+    kind: str
+    summary: str
+    detail: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class Snapshot:
     meta: SnapshotMeta
     patient: PatientView
@@ -265,6 +305,31 @@ class Snapshot:
     identity: IdentityAnalysis
 
 
+@dataclass(frozen=True, slots=True)
+class NormalizationResult:
+    """Everything one normalization pass produced.
+
+    The snapshot is what a clinician reads; the other four fields are what the
+    application had to decide along the way. Keeping them beside the snapshot
+    rather than in a log is the point -- a consumer can always answer "what was
+    thrown away, and why?".
+
+    Normalization is deterministic: the same bundle and the same `as_of`
+    produce an identical result.
+    """
+
+    snapshot: Snapshot
+    excluded: tuple[ExcludedView, ...] = field(default_factory=tuple)
+    conflicts: tuple[Conflict, ...] = field(default_factory=tuple)
+    unresolved_references: tuple[UnresolvedReferenceRecord, ...] = field(default_factory=tuple)
+    warnings: tuple[Warning_, ...] = field(default_factory=tuple)
+    issues: tuple[DataQualityIssue, ...] = field(default_factory=tuple)
+
+    @property
+    def is_clean(self) -> bool:
+        return not (self.conflicts or self.unresolved_references or self.warnings)
+
+
 # --------------------------------------------------------------------------
 # Assembler
 # --------------------------------------------------------------------------
@@ -282,6 +347,7 @@ class SnapshotAssembler:
         self._terminology = TerminologyService(self._issues)
         self._resolver = ReferenceResolver(loaded.index)
         self._withhold = withhold_excluded_values
+        self._unresolved: list[UnresolvedReferenceRecord] = []
 
     # -- public ------------------------------------------------------------
 
@@ -313,6 +379,78 @@ class SnapshotAssembler:
         return IdentityAnalyzer(self._issues).analyse(
             self.patients(), self._reference_counts(), resource_ids
         )
+
+    def normalize(
+        self, patient_id: str, *, as_of: datetime | None = None
+    ) -> NormalizationResult | None:
+        """Run one normalization pass. The application's main entry point.
+
+        Returns None when the bundle contains no such Patient -- the caller
+        turns that into a 404. Every other outcome, including a bundle where
+        nothing at all is displayable, produces a result.
+        """
+        snapshot = self.build(patient_id, as_of=as_of)
+        if snapshot is None:
+            return None
+        return NormalizationResult(
+            snapshot=snapshot,
+            excluded=snapshot.excluded,
+            conflicts=self._collect_conflicts(snapshot),
+            unresolved_references=tuple(self._unresolved),
+            warnings=snapshot.warnings,
+            issues=tuple(self._issues.all()),
+        )
+
+    def _collect_conflicts(self, snapshot: Snapshot) -> tuple[Conflict, ...]:
+        """Contradictions the source left open. Surfaced, never settled."""
+        conflicts: list[Conflict] = [
+            Conflict(
+                kind="duplicate-patient-candidate",
+                summary=(
+                    f"Patient records {' and '.join(candidate.member_ids)} overlap but were "
+                    f"not merged (confidence: {candidate.confidence.value})."
+                ),
+                detail={
+                    "candidateId": candidate.candidate_id,
+                    "confidence": candidate.confidence.value,
+                    "determination": candidate.determination.value,
+                },
+            )
+            for candidate in snapshot.identity.candidates
+            if not candidate.merge_performed
+        ]
+        conflicts.extend(
+            Conflict(
+                kind="code-system-mismatch",
+                summary=coding.mismatch_reason or "Code does not validate against its system.",
+                detail={"system": coding.system or "", "code": coding.code or ""},
+            )
+            for coding in self._mismatched_codings(snapshot)
+        )
+        conflicts.extend(
+            Conflict(
+                kind=issue.code.value,
+                summary=issue.message,
+                detail=issue.detail,
+            )
+            for issue in self._issues.all()
+            if issue.code
+            in (IssueCode.BDL_DUPLICATE_RESOURCE_ID, IssueCode.BDL_DUPLICATE_FULLURL)
+        )
+        return tuple(conflicts)
+
+    @staticmethod
+    def _mismatched_codings(snapshot: Snapshot) -> list[ResolvedCoding]:
+        codings: list[ResolvedCoding] = []
+        groups: list[list[ResolvedCoding]] = [
+            [c.code for c in snapshot.conditions_current + snapshot.conditions_historical],
+            [a.code for a in snapshot.allergies_current + snapshot.allergies_historical],
+            [m.medication for m in snapshot.medications_active + snapshot.medications_historical],
+            [o.code for o in snapshot.vital_signs + snapshot.other_observations],
+        ]
+        for group in groups:
+            codings.extend(coding for coding in group if coding.code_system_mismatch)
+        return codings
 
     def build(self, patient_id: str, *, as_of: datetime | None = None) -> Snapshot | None:
         patient = next((p for p in self.patients() if p.id == patient_id), None)
@@ -412,7 +550,10 @@ class SnapshotAssembler:
                 self._by_recency(medications_historical, lambda m: m.authored_on)
             ),
             allergies_current=tuple(
-                self._by_recency(allergies_current, lambda a: a.recorded_date)
+                self._by_prominence(
+                    self._by_recency(allergies_current, lambda a: a.recorded_date),
+                    classified,
+                )
             ),
             allergies_historical=tuple(
                 self._by_recency(allergies_historical, lambda a: a.recorded_date)
@@ -533,6 +674,16 @@ class SnapshotAssembler:
         if result is None or not result.is_problem:
             return result
 
+        self._unresolved.append(
+            UnresolvedReferenceRecord(
+                source_resource_id=source.id,
+                source_resource_type=source.resourceType,
+                path=path,
+                reference=result.reference,
+                status=result.status.value,
+                reason=result.reason.value if result.reason else None,
+            )
+        )
         code, severity = _RESOLUTION_ISSUES[result.status]
         self._issues.add(
             code,
@@ -754,7 +905,7 @@ class SnapshotAssembler:
         return ExcludedView(
             id=resource.id or "",
             resource_type=resource.resourceType,
-            suppression_reason="ENTERED_IN_ERROR",
+            suppression_reason=c.exclusion_reason or ExclusionReason.ENTERED_IN_ERROR,
             suppression_field=c.suppression_field,
             summary=self._summarise(resource),
             value_withheld=withhold,
@@ -900,6 +1051,10 @@ class SnapshotAssembler:
                     masked=bool(i.value and "*" in i.value),
                 )
                 for i in patient.identifier
+                if i.system not in SUPPRESSED_IDENTIFIER_SYSTEMS
+            ),
+            withheld_identifier_count=sum(
+                1 for i in patient.identifier if i.system in SUPPRESSED_IDENTIFIER_SYSTEMS
             ),
             address_lines=tuple(address.line) if address else (),
             city=address.city if address else None,
@@ -1078,6 +1233,28 @@ class SnapshotAssembler:
                     )
                 )
         return warnings
+
+    @staticmethod
+    def _by_prominence(
+        allergies: list[AllergyView],
+        classified: list[tuple[DomainResource, Classification]],
+    ) -> list[AllergyView]:
+        """Stable re-sort so confirmed high-criticality allergies lead.
+
+        Applied after the recency sort, so items of equal prominence keep their
+        recency order.
+        """
+        sources = {
+            resource.id: resource
+            for resource, _ in classified
+            if isinstance(resource, AllergyIntolerance)
+        }
+        return sorted(
+            allergies,
+            key=lambda view: allergy_prominence(sources[view.id])
+            if view.id in sources
+            else (4, 1),
+        )
 
     @staticmethod
     def _by_recency(items: list[T], key: Callable[[T], PartialDate | None]) -> list[T]:

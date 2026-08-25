@@ -47,6 +47,14 @@ SSN_SYSTEM = "http://hl7.org/fhir/sid/us-ssn"
 # is meaningful on its own.
 _STRONG_IDENTIFIER_SYSTEMS = frozenset({SSN_SYSTEM})
 
+# Short labels for evidence prose. Identifier *values* are never quoted for
+# these systems -- only the fact that they matched or were unavailable.
+_SYSTEM_LABELS = {SSN_SYSTEM: "a national identifier (SSN)"}
+
+
+def _system_label(system: str) -> str:
+    return _SYSTEM_LABELS.get(system, system)
+
 _STREET_SUFFIXES = {
     "ln": "lane", "st": "street", "ave": "avenue", "av": "avenue", "rd": "road",
     "dr": "drive", "blvd": "boulevard", "ct": "court", "pl": "place",
@@ -247,11 +255,13 @@ def _compare_identifiers(a: Patient, b: Patient) -> list[Evidence]:
         shared = a_by_system[system] & b_by_system[system]
         if shared:
             strong = system in _STRONG_IDENTIFIER_SYSTEMS
+            # The value of a high-entropy identifier is never quoted back: the
+            # evidence is that they match, not what they are.
+            quoted = "the same identifier" if strong else f"identifier '{sorted(shared)[0]}'"
             evidence.append(
                 Evidence(
                     signal="identifier-exact-match",
-                    detail=f"Both records carry identifier '{sorted(shared)[0]}' in "
-                    f"system {system}.",
+                    detail=f"Both records carry {quoted} in {_system_label(system)}.",
                     strength=EvidenceStrength.DECISIVE if strong else EvidenceStrength.STRONG,
                     direction=EvidenceDirection.FOR,
                 )
@@ -287,8 +297,9 @@ def _compare_identifiers(a: Patient, b: Patient) -> list[Evidence]:
             evidence.append(
                 Evidence(
                     signal="no-corroborating-strong-identifier",
-                    detail=f"A {system} identifier exists on {present[0]} only, so the "
-                    f"one high-entropy identifier available cannot be cross-checked.",
+                    detail=f"{_system_label(system).capitalize()} exists on {present[0]} "
+                    f"only, so the one high-entropy identifier available cannot be "
+                    f"cross-checked.",
                     strength=EvidenceStrength.BLOCKS_CONFIRMATION,
                     direction=EvidenceDirection.AGAINST,
                 )

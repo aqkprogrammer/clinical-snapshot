@@ -8,8 +8,11 @@ from fastapi.testclient import TestClient
 
 
 class TestHealth:
+    def test_unversioned_alias_still_answers(self, client: TestClient) -> None:
+        assert client.get("/health").json()["status"] == "ok"
+
     def test_reports_the_loaded_bundle(self, client: TestClient) -> None:
-        body = client.get("/health").json()
+        body = client.get("/api/v1/health").json()
         assert body["status"] == "ok"
         assert body["bundleLoaded"] is True
         assert body["bundleId"] == "scenario1-synthetic-bundle"
@@ -70,11 +73,25 @@ class TestSnapshot:
             "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
         ]
 
-    def test_keeps_the_ssn_mask_intact(self, client: TestClient) -> None:
+    def test_ssn_is_never_exposed(self, client: TestClient) -> None:
+        """A clinical snapshot has no use for a national identifier, so it is
+        withheld entirely rather than merely masked."""
+        body = client.get("/api/v1/patients/patient-001/snapshot").text
+        assert "4471" not in body
+        assert "us-ssn" not in body
+
+    def test_withheld_identifiers_are_counted_so_the_omission_is_visible(
+        self, client: TestClient
+    ) -> None:
         patient = client.get("/api/v1/patients/patient-001/snapshot").json()["data"]["patient"]
-        ssn = next(i for i in patient["identifiers"] if i["systemName"] == "US SSN")
-        assert ssn["value"] == "***-**-4471"
-        assert ssn["masked"] is True
+        assert patient["withheldIdentifierCount"] == 1
+        assert [i["systemName"] for i in patient["identifiers"]] == ["MRN"]
+
+    def test_mrn_is_retained_because_the_duplicate_warning_needs_it(
+        self, client: TestClient
+    ) -> None:
+        patient = client.get("/api/v1/patients/patient-001/snapshot").json()["data"]["patient"]
+        assert any(i["value"] == "MRN-48213" for i in patient["identifiers"])
 
 
 class TestDataQuality:

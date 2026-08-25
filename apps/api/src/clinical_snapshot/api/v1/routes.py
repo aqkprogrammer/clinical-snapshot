@@ -25,8 +25,20 @@ def get_service(settings: Annotated[Settings, Depends(get_settings)]) -> Snapsho
 ServiceDep = Annotated[SnapshotService, Depends(get_service)]
 
 
-@router.get("/health", response_model=api.HealthResponse, tags=["meta"])
+@router.get("/api/v1/health", response_model=api.HealthResponse, tags=["meta"])
 def health(service: ServiceDep) -> api.HealthResponse:
+    """Liveness, plus whether the configured bundle actually loaded."""
+    return service.health(VERSION)
+
+
+@router.get(
+    "/health",
+    response_model=api.HealthResponse,
+    tags=["meta"],
+    include_in_schema=False,
+)
+def health_alias(service: ServiceDep) -> api.HealthResponse:
+    """Unversioned alias, kept for container health checks."""
     return service.health(VERSION)
 
 

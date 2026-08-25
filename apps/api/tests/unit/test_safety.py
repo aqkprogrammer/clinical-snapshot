@@ -9,7 +9,13 @@ wrong suppression mechanism to the user.
 
 import pytest
 
-from clinical_snapshot.domain.safety import Disposition, Flag, classify
+from clinical_snapshot.domain.safety import (
+    Disposition,
+    ExclusionReason,
+    Flag,
+    allergy_prominence,
+    classify,
+)
 from clinical_snapshot.fhir.models import (
     AllergyIntolerance,
     CodeableConcept,
@@ -184,3 +190,75 @@ class TestUnsupportedTypes:
     def test_unknown_resource_type_needs_review_rather_than_being_shown(self) -> None:
         result = classify(UnknownResource(resourceType="Procedure"))
         assert result.disposition is Disposition.NEEDS_REVIEW
+
+
+class TestStructuredExclusionReasons:
+    """Every exclusion is traceable: a typed reason plus the field that carried it."""
+
+    def test_condition_retraction_carries_a_typed_reason(self) -> None:
+        result = classify(
+            Condition(
+                clinicalStatus=concept("inactive"),
+                verificationStatus=concept("entered-in-error"),
+            )
+        )
+        assert result.exclusion_reason is ExclusionReason.ENTERED_IN_ERROR
+        assert result.suppression_field == "Condition.verificationStatus"
+
+    def test_refuted_is_a_distinct_reason_from_entered_in_error(self) -> None:
+        result = classify(
+            Condition(clinicalStatus=concept("active"), verificationStatus=concept("refuted"))
+        )
+        assert result.exclusion_reason is ExclusionReason.REFUTED
+
+    def test_non_excluded_resources_carry_no_exclusion_reason(self) -> None:
+        for resource in (
+            Condition(clinicalStatus=concept("active"), verificationStatus=concept("confirmed")),
+            MedicationRequest(status="stopped"),
+            Observation(status="final"),
+            Encounter(status="finished"),
+        ):
+            assert classify(resource).exclusion_reason is None
+
+    def test_every_resource_type_reports_its_own_suppression_field(self) -> None:
+        cases = [
+            (Observation(status="entered-in-error"), "Observation.status"),
+            (Encounter(status="entered-in-error"), "Encounter.status"),
+            (MedicationRequest(status="entered-in-error"), "MedicationRequest.status"),
+            (
+                AllergyIntolerance(verificationStatus=concept("entered-in-error")),
+                "AllergyIntolerance.verificationStatus",
+            ),
+        ]
+        for resource, expected_field in cases:
+            result = classify(resource)
+            assert result.is_excluded
+            assert result.suppression_field == expected_field
+            assert result.exclusion_reason is ExclusionReason.ENTERED_IN_ERROR
+
+
+class TestAllergyProminence:
+    def test_confirmed_high_criticality_sorts_first(self) -> None:
+        high = AllergyIntolerance(
+            criticality="high", verificationStatus=concept("confirmed")
+        )
+        unconfirmed = AllergyIntolerance(
+            criticality="unable-to-assess", verificationStatus=concept("unconfirmed")
+        )
+        assert allergy_prominence(high) < allergy_prominence(unconfirmed)
+
+    def test_confirmed_outranks_unconfirmed_at_equal_criticality(self) -> None:
+        confirmed = AllergyIntolerance(criticality="high", verificationStatus=concept("confirmed"))
+        unconfirmed = AllergyIntolerance(
+            criticality="high", verificationStatus=concept("unconfirmed")
+        )
+        assert allergy_prominence(confirmed) < allergy_prominence(unconfirmed)
+
+    def test_absent_criticality_sorts_last_rather_than_being_assumed_low(self) -> None:
+        unknown = AllergyIntolerance(verificationStatus=concept("confirmed"))
+        low = AllergyIntolerance(criticality="low", verificationStatus=concept("confirmed"))
+        assert allergy_prominence(low) < allergy_prominence(unknown)
+
+    def test_ordering_is_deterministic(self) -> None:
+        allergy = AllergyIntolerance(criticality="high", verificationStatus=concept("confirmed"))
+        assert len({allergy_prominence(allergy) for _ in range(20)}) == 1

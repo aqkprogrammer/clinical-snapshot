@@ -201,6 +201,7 @@ class PatientDetail(Schema):
     telecom: list[tuple[str, str]] = []
     profiles_claimed: list[str] = []
     us_core: UsCoreExtensions
+    withheld_identifier_count: int = 0
 
 
 # -- identity --------------------------------------------------------------

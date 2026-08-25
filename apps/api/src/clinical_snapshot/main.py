@@ -9,10 +9,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api.v1.routes import VERSION, router
 from .config import get_settings
+from .logging_config import configure_logging
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings.log_level)
     app = FastAPI(
         title="Clinical Snapshot API",
         version=VERSION,

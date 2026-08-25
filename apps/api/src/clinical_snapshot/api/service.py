@@ -8,15 +8,18 @@ for.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ..domain.issues import DataQualityIssue, IssueLog
-from ..domain.snapshot import Snapshot, SnapshotAssembler
+from ..domain.snapshot import NormalizationResult, Snapshot, SnapshotAssembler
 from ..fhir.loader import load_bundle
 from ..fhir.models import Patient
+from ..logging_config import log_event
 from ..schemas import responses as api
 
 
@@ -100,11 +103,39 @@ class SnapshotService:
         )
 
     def snapshot(self, patient_id: str, *, as_of: datetime | None = None) -> api.SnapshotResponse:
+        result = self.normalize(patient_id, as_of=as_of)
+        return _to_snapshot_response(result.snapshot, result.issues)
+
+    def normalize(
+        self, patient_id: str, *, as_of: datetime | None = None
+    ) -> NormalizationResult:
+        """Run the normalization pipeline for one patient.
+
+        Logs counts only. Nothing identifying beyond the requested patient id
+        -- which the caller already supplied -- reaches a log line.
+        """
         assembler = self._assembler()
-        snapshot = assembler.build(patient_id, as_of=as_of)
-        if snapshot is None:
+        result = assembler.normalize(patient_id, as_of=as_of)
+        if result is None:
+            log_event(
+                logging.WARNING,
+                "snapshot requested for unknown patient",
+                patientId=patient_id,
+                bundleId=assembler.loaded.bundle.id,
+            )
             raise PatientNotFoundError(patient_id)
-        return _to_snapshot_response(snapshot, assembler.issues)
+        log_event(
+            logging.INFO,
+            "snapshot normalized",
+            patientId=patient_id,
+            bundleId=assembler.loaded.bundle.id,
+            excludedCount=len(result.excluded),
+            conflictCount=len(result.conflicts),
+            unresolvedReferenceCount=len(result.unresolved_references),
+            warningCount=len(result.warnings),
+            issueCount=len(result.issues),
+        )
+        return result
 
     def excluded(self, patient_id: str) -> api.ExcludedResponse:
         assembler = self._assembler()
@@ -155,8 +186,10 @@ def _bundle_meta(assembler: SnapshotAssembler) -> dict[str, Any]:
     }
 
 
-def _issues(log: IssueLog) -> list[api.Issue]:
-    return [_issue(i) for i in log.all()]
+def _issues(source: IssueLog | Sequence[DataQualityIssue]) -> list[api.Issue]:
+    """Accepts a live log or an already-materialised issue sequence."""
+    items = source.all() if isinstance(source, IssueLog) else list(source)
+    return [_issue(issue) for issue in items]
 
 
 def _issue(issue: DataQualityIssue) -> api.Issue:
@@ -171,7 +204,9 @@ def _issue(issue: DataQualityIssue) -> api.Issue:
     )
 
 
-def _to_snapshot_response(snapshot: Snapshot, issues: IssueLog) -> api.SnapshotResponse:
+def _to_snapshot_response(
+    snapshot: Snapshot, issues: IssueLog | Sequence[DataQualityIssue]
+) -> api.SnapshotResponse:
     raw = asdict(snapshot)
     meta = raw.pop("meta")
     # Retracted resources are served by their own endpoint so they can never be

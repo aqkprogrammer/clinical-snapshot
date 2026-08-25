@@ -184,6 +184,7 @@ export interface PatientDetail {
   telecom: [string, string][];
   profilesClaimed: string[];
   usCore: UsCoreExtensions;
+  withheldIdentifierCount: number;
 }
 
 export interface Evidence {

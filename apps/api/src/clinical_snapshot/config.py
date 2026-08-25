@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     """
 
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    """Allowed browser origins. Defaults to the local frontend only -- never a
+    wildcard, because the API serves clinical content."""
+
+    log_level: str = "INFO"
 
 
 def get_settings() -> Settings:

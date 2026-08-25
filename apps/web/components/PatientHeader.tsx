@@ -29,6 +29,14 @@ export function PatientHeader({ patient, meta }: { patient: PatientDetail; meta:
                 ) : null}
               </span>
             ))}
+            {patient.withheldIdentifierCount > 0 ? (
+              <span
+                title="A clinical snapshot has no use for a national identifier, so it is withheld by the API rather than masked."
+                className="unknown-value"
+              >
+                {patient.withheldIdentifierCount} identifier withheld
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="small muted" style={{ textAlign: "right", minWidth: 210 }}>

@@ -59,6 +59,34 @@ class Disposition(StrEnum):
     than being guessed into one of the others."""
 
 
+class ExclusionReason(StrEnum):
+    """Why a resource may never appear as a current clinical fact.
+
+    Structured rather than free text so exclusions can be counted, filtered,
+    and asserted on. Every excluded resource carries one, which is what makes
+    the exclusion traceable rather than a silent disappearance.
+    """
+
+    ENTERED_IN_ERROR = "entered-in-error"
+    """The source retracted the record. It should never have existed."""
+
+    REFUTED = "refuted"
+    """The source actively disproved the assertion."""
+
+
+@dataclass(frozen=True, slots=True)
+class ExcludedResource:
+    """A resource withheld from every clinical section, and why."""
+
+    resource_id: str
+    resource_type: str
+    reason: ExclusionReason
+    suppression_field: str
+    """The element that carried the retraction. Recorded because Condition and
+    AllergyIntolerance retract via verificationStatus while Observation and
+    Encounter use status, and a reader deserves to know which."""
+
+
 class Flag(StrEnum):
     """Caveats that travel with a resource that is otherwise displayable."""
 
@@ -76,6 +104,7 @@ class Classification:
     rule: str
     reason: str | None = None
     suppression_field: str | None = None
+    exclusion_reason: ExclusionReason | None = None
     flags: tuple[Flag, ...] = field(default_factory=tuple)
 
     @property
@@ -110,13 +139,19 @@ def _status_code(concept: CodeableConcept | None) -> str | None:
 
 
 def _retracted(field_name: str, status: str) -> Classification:
-    label = "entered in error" if status == "entered-in-error" else "refuted"
+    reason = (
+        ExclusionReason.ENTERED_IN_ERROR
+        if status == "entered-in-error"
+        else ExclusionReason.REFUTED
+    )
+    label = "entered in error" if reason is ExclusionReason.ENTERED_IN_ERROR else "refuted"
     return Classification(
         disposition=Disposition.EXCLUDED,
         rule=f"RULE_{field_name.split('.')[0].upper()}_RETRACTED",
         reason=f"Source marked this record '{status}' via {field_name}. It was {label} "
         f"and is not a current clinical fact.",
         suppression_field=field_name,
+        exclusion_reason=reason,
     )
 
 
@@ -306,4 +341,22 @@ def _classify_medication(medication: MedicationRequest) -> Classification:
         Disposition.NEEDS_REVIEW,
         "RULE_MEDICATION_STATUS_UNRECOGNISED",
         f"Unrecognised MedicationRequest.status '{status}'.",
+    )
+
+
+def allergy_prominence(allergy: AllergyIntolerance) -> tuple[int, int]:
+    """Ordering key for allergies: most actionable first.
+
+    A confirmed high-criticality allergy is the single most consequential item
+    on a clinical snapshot, so it sorts above an unconfirmed one regardless of
+    when each was recorded. Both keys read explicit source fields; nothing is
+    inferred about severity that the source did not state.
+
+    Lower sorts first.
+    """
+    criticality_rank = {"high": 0, "low": 2, "unable-to-assess": 3}
+    verification = _status_code(allergy.verificationStatus)
+    return (
+        criticality_rank.get(allergy.criticality or "", 4),
+        0 if verification == "confirmed" else 1,
     )
